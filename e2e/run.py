@@ -90,11 +90,14 @@ exit "$status"
             return tabs if any(tab["active"] for tab in tabs) else None
         tabs = self.wait(started, "Zellij client startup")
         self.action("rename-tab-by-id", str(tabs[0]["tab_id"]), "control")
-        self.tab = int(self.action("new-tab", "--name", "subject", "--cwd", str(self.repo), "--", shutil.which("pi"), *args).strip())
+        self.explicit_name = "My explicit tab name"
+        self.tab = int(self.action("new-tab", "--name", self.explicit_name, "--cwd", str(self.repo), "--", shutil.which("pi"), *args).strip())
         self.wait(lambda: (self.home / "session-started").exists(), "PI session startup")
         pane = self.wait(lambda: next((p for p in self.panes() if p["tab_id"] == self.tab and not p["is_plugin"]), None), "PI pane")
         self.pane = str(pane["id"])
-        self.wait_name(lambda name: name == "repo:main", "initial title")
+        self.wait(lambda: any(message.get("mode") == "base" for message in self.delivered_statuses()),
+                  "startup status delivery")
+        self.assert_static_title()
 
     def run_command(self, args, check=True):
         result = subprocess.run(args, env=self.env, cwd=self.repo, text=True,
@@ -135,7 +138,8 @@ exit "$status"
         return self.wait(lambda: name if (name := self.tab_name()) is not None and predicate(name) else None, description)
 
     def assert_static_title(self):
-        name = self.wait_name(lambda value: value == "repo:main", "static base title")
+        name = self.wait_name(lambda value: bool(value), "tab name snapshot")
+        self.assertEqual(name, self.explicit_name, "PI must preserve the user's explicit tab name")
         self.assertIsNone(STATUS_PREFIX.match(name))
 
     def send(self, text):
@@ -165,10 +169,16 @@ exit "$status"
 
     def test_parent_status_uses_pipe_without_mutating_the_title(self):
         self.send("hold")
+        self.wait(lambda: any(message.get("mode") == "working" for message in self.delivered_statuses()),
+                  "working status delivery")
         self.assert_static_title()
+        self.explicit_name = "Renamed by the user during work"
+        self.action("rename-tab-by-id", str(self.tab), self.explicit_name)
         self.action("go-to-tab-name", "control")
         self.mark("release-parent")
         self.settled()
+        self.wait(lambda: any(message.get("mode") == "done" for message in self.delivered_statuses()),
+                  "settled status delivery")
         self.assert_static_title()
         self.action("go-to-tab-by-id", str(self.tab))
         started = time.monotonic()
@@ -176,12 +186,12 @@ exit "$status"
         self.wait(lambda: (self.home / "shutdown").exists(), "real session_shutdown event")
         self.wait(lambda: any(str(p["id"]) == self.pane and p["exited"] for p in self.panes()), "PI process exit")
         elapsed = time.monotonic() - started
-        self.assertLess(elapsed, 0.25, f"PI shutdown took {elapsed:.3f}s")
         self.wait(
             lambda: any(message.get("kind") == "remove" for message in self.delivered_statuses()),
             "successful remove pipe delivery",
         )
         self.assert_static_title()
+        self.assertLess(elapsed, 0.25, f"PI shutdown took {elapsed:.3f}s")
 
     def test_modern_child_outlives_parent_without_title_animation(self):
         self.send("spawn")

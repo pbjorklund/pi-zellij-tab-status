@@ -2,7 +2,7 @@
 
 A PI extension that publishes agent state to the `zellij-tabbar` vertical sidebar.
 
-While PI works, the sidebar shows an animated spinner beside the owning tab. When a background run settles, it shows `●` until you view that tab. Spinner frames are rendered inside the sidebar; they do not rename the tab every 500 ms.
+While PI works, the sidebar shows an animated spinner beside the owning tab. When a background run settles, it shows `●` until you view that tab. The extension only publishes pane-scoped PI status. The sidebar owns automatic tab naming and renders spinner frames without renaming tabs.
 
 Use it when PI runs inside Zellij with the matching custom vertical sidebar and background completion should stay visible across tabs. Do not use it outside a supported PI TUI, as a job audit log, or with Zellij's built-in tab bar when status markers are required.
 
@@ -33,12 +33,12 @@ Update with `pi update git:github.com/pbjorklund/pi-zellij-tab-status`, then rel
 - Publishes `done` once the parent has settled and all tracked subagents have finished. The visible sidebar clears it immediately; the extension confirms tab visibility with bounded backoff and publishes `base` so every sidebar instance converges.
 - Adds optional watch letters after the sidebar tab name: checklist `C`, improvement `I`, project tasks `P`, GitHub review `R`, and Sentry `S`. Enabled watchers appear in `CIPRS` order, including while waiting, paused, or in error. The spinner and unseen-completion marker remain independent. Canonical `watcher:af-watch-*` and `watcher:watch-*` events take precedence over legacy `watcher:cw/iw/pw/rw/sw` events for each letter; a canonical `off` stops stale legacy events from reviving a marker during rollout.
 - Publishes a runtime-specific removal during shutdown.
-- Maintains a static `repository/path:branch` tab title for Git worktrees, or the directory name elsewhere. It changes the title only when the base title changes.
+- Never renames tabs, including at startup, settlement, and exit. Explicit user names stay intact. The sidebar owns automatic names from native pane cwd labels, without Git branch inference.
 - Coalesces event bursts and treats Zellij commands as best effort, so status failures do not block PI lifecycle hooks.
 
 Subagent tracking supports both the `subagents:started` / `subagents:completed` / `subagents:failed` event bus (payload: `{ id }`) and the `@narumitw/pi-subagents` named-agent tools (`subagent`, `subagent_resume`, and `subagent_kill`). It reads new `subagent_result` entries from in-memory session history every 500 ms while agents are active. This catches asynchronous completions while the parent is idle without reading session files or spawning status-frame processes.
 
-The extension needs PI 0.87.0 or newer and a Zellij version that provides `list-panes`, `list-tabs`, `rename-tab-by-id`, and `pipe`. Status markers require the matching custom sidebar; Zellij's built-in horizontal tab bar shows the static title only.
+The extension needs PI 0.87.0 or newer and a Zellij version that provides `list-panes`, `list-tabs`, and `pipe`. Status markers require the matching custom sidebar; Zellij's built-in horizontal tab bar keeps its normal name but does not show PI status.
 
 ## Status protocol
 
@@ -78,16 +78,16 @@ npm run test:smoke
 npm run test:e2e
 ```
 
-Each test starts a real PI TUI in a separate Zellij session with temporary configuration and no inherited credentials. These extension tests verify lifecycle handling, successful pipe publication, static title behavior, and cleanup. The `zellij-tabbar` repository's isolated live smoke test verifies status rendering, local animation, background completion, and clearing on view with the real WASM plugin.
+Each test starts a real PI TUI in a separate Zellij session with temporary configuration and no inherited credentials. These extension tests verify lifecycle handling, successful pipe publication, explicit user names surviving PI start, work, settlement, and exit, and cleanup. The `zellij-tabbar` repository's isolated live smoke test verifies status rendering, local animation, background completion, and clearing on view with the real WASM plugin.
 
 ### Structure
 
 - `pi-extension.ts` registers lifecycle handlers.
-- `controller.ts` coalesces lifecycle changes, replays active status for new sidebars, maintains the static title, and orders shutdown.
-- `tab-binding.ts` owns binding retries and title caching.
-- `ownership.ts` parses pane/tab data and selects the owner. `zellij.ts` reads Zellij state and writes static titles.
+- `controller.ts` coalesces lifecycle changes, replays active status for new sidebars, and orders shutdown.
+- `tab-binding.ts` owns binding retries and caching for completion visibility checks.
+- `ownership.ts` parses pane/tab data and selects the owner. `zellij.ts` only reads Zellij state.
 - `activity.ts` owns parent, child, and compaction transitions. `subagent-jobs.ts` adapts named-agent results and reads idle completions.
-- `status-model.ts` retains marker parsing compatibility for old titles; `tab-title.ts` derives Git/directory titles. `commands.ts` keeps stdout-reading commands captured, while `status-transport.ts` serializes status pipes with ignored stdio and a 150 ms deadline.
+- `status-model.ts` retains marker parsing compatibility for old titles; `tab-title.ts` retains exported Git/directory title helpers for compatibility, unused by the extension lifecycle. `commands.ts` keeps stdout-reading commands captured, while `status-transport.ts` serializes status pipes with ignored stdio and a 150 ms deadline.
 
 ## License
 

@@ -7,10 +7,9 @@ test("publisher: lifecycle transitions use snapshots instead of animated tab ren
 
   await h.emit("session_start");
   await h.emit("agent_start");
-  const writesAfterStart = h.writes.length;
   await h.tick(5_000);
 
-  assert.equal(h.writes.length, writesAfterStart, "animation must not rename the tab");
+  assert.deepEqual(h.writes, [], "status publication must not rename the tab");
   const pipeCalls = h.calls.filter(({ command, args }) =>
     command === "zellij" && args[0] === "pipe" && !args.includes("action"));
   assert.ok(pipeCalls.length > 0);

@@ -6,14 +6,19 @@ const pane = (tabId, tabName, cwd = "/repo") => JSON.stringify([
   { id: 248, tab_id: tabId, tab_name: tabName, pane_cwd: cwd, pane_command: "pi" },
 ]);
 
-test("binding: startup replaces a legacy animated title with the static base title", async (t) => {
+test("binding: startup preserves an explicit name through work, settlement, and shutdown", async (t) => {
   const h = harness(t);
-  h.setPaneOutput(pane(26, "⠋ repo:main"));
+  h.setPaneOutput(pane(26, "My explicit name"));
   await h.emit("session_start");
-  assert.deepEqual(h.writes, [{ tabId: "26", name: "repo:main" }]);
   await h.emit("agent_start");
   await h.tick(60_000);
-  assert.deepEqual(h.writes, [{ tabId: "26", name: "repo:main" }]);
+  await h.emit("agent_settled");
+  await h.fire("session_shutdown");
+  assert.deepEqual(h.writes, []);
+  assert.equal(h.calls.some(({ command }) => command === "git"), false);
+  assert.deepEqual(h.pipes.filter(({ kind }) => kind === "snapshot").map(({ mode }) => mode),
+    ["base", "working", "working", "done"]);
+  assert.equal(h.pipes.at(-1).kind, "remove");
 });
 
 test("binding: a transient discovery miss retains a known existing tab", async (t) => {
@@ -27,23 +32,22 @@ test("binding: a transient discovery miss retains a known existing tab", async (
   assert.equal(h.pipes.at(-1)?.mode, "done");
 });
 
-test("binding: a failed static rename retries and invalidates the binding", async (t) => {
+test("binding: discovery retries without writing a title", async (t) => {
   const h = harness(t);
+  h.setPaneOutput("[]");
+  await h.emit("session_start");
   h.setPaneOutput(pane(26, "legacy"));
-  h.failRenames(2);
-  h.fire("session_start");
-  await flush();
   await h.tick(100);
-  assert.equal(h.calls.filter(({ args }) => args[1] === "rename-tab-by-id").length, 2);
+  assert.equal(h.calls.filter(({ args }) => args[1] === "list-panes").length, 2);
   assert.deepEqual(h.writes, []);
   await h.emit("agent_start");
-  assert.ok(h.calls.filter(({ args }) => args[1] === "list-panes").length >= 2);
+  assert.equal(h.pipes.at(-1).mode, "working");
 });
 
-test("binding: shutdown during initial title lookup cannot acquire or rename a tab", async (t) => {
+test("binding: shutdown aborts pane lookup without renaming a tab", async (t) => {
   const h = harness(t);
   h.setPaneOutput(pane(26, "shell"));
-  const held = h.hold((command) => command === "git");
+  const held = h.hold((_command, args) => args[1] === "list-panes");
   h.fire("session_start");
   await held.entered.promise;
   await h.fire("session_shutdown");
@@ -52,27 +56,34 @@ test("binding: shutdown during initial title lookup cannot acquire or rename a t
   assert.equal(h.pipes.at(-1)?.kind, "remove");
 });
 
-test("binding: an expired title refresh writes only the changed static title", async (t) => {
-  const h = harness(t);
+test("binding: moved panes clear completion only on their new tab", async (t) => {
+  const h = harness(t, { seenPollFirstDelayMs: 5 });
   await h.start();
   await h.tick(31_000);
-  h.setBranch("feature");
+  h.moveTo(27);
   await h.emit("agent_settled");
-  assert.equal(h.writes.at(-1)?.name, "repo:feature");
-  assert.ok(h.writes.every(({ name }) => !/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◐◓◑◒●] /.test(name)));
+  h.setTabOutput(JSON.stringify([
+    { tab_id: 26, name: "Old explicit name", active: true },
+    { tab_id: 27, name: "New explicit name", active: false },
+  ]));
+  await h.tick(5);
+  assert.equal(h.pipes.at(-1).mode, "done");
+  h.setTabOutput(JSON.stringify([{ tab_id: 27, name: "New explicit name", active: true }]));
+  await h.tick(10);
+  assert.equal(h.pipes.at(-1).mode, "base");
+  assert.deepEqual(h.writes, []);
 });
 
-test("binding: a superseding state prevents an obsolete title write", async (t) => {
+test("binding: a superseding state cancels obsolete discovery without a title write", async (t) => {
   const h = harness(t);
   await h.start();
   await h.tick(31_000);
-  h.setBranch("feature");
-  const held = h.hold((command) => command === "git");
+  const held = h.hold((_command, args) => args[1] === "list-tabs");
   h.fire("agent_settled");
   await held.entered.promise;
   h.fire("agent_start");
   held.release.resolve();
   await flush();
-  assert.equal(h.writes.at(-1)?.name, "repo:feature");
+  assert.deepEqual(h.writes, []);
   assert.equal(h.pipes.at(-1)?.mode, "working");
 });

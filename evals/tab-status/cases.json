@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "privacy": "public",
   "cases": [
     {
@@ -99,22 +99,22 @@
       "expected_test": "activity: job polling reads only new entries and stops after completion"
     },
     {
-      "id": "static-title-migration",
+      "id": "explicit-name-preserved",
       "layer": 2,
       "category": "title",
-      "expected_test": "binding: startup replaces a legacy animated title with the static base title"
+      "expected_test": "binding: startup preserves an explicit name through work, settlement, and shutdown"
     },
     {
-      "id": "static-title-no-markers",
+      "id": "moved-pane-completion-visibility",
       "layer": 2,
-      "category": "title",
-      "expected_test": "binding: an expired title refresh writes only the changed static title"
+      "category": "ownership",
+      "expected_test": "binding: moved panes clear completion only on their new tab"
     },
     {
-      "id": "rename-failure-invalidates-binding",
+      "id": "discovery-retries-without-renaming",
       "layer": 2,
       "category": "recovery",
-      "expected_test": "binding: a failed static rename retries and invalidates the binding"
+      "expected_test": "binding: discovery retries without writing a title"
     },
     {
       "id": "reject-different-cwd",

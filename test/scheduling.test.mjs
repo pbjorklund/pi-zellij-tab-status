@@ -51,7 +51,7 @@ test("scheduling: repeated same-mode subagent events add no transport", async (t
   assert.equal(modes(h).at(-1), "done");
 });
 
-test("scheduling: title discovery cannot delay active status replay", async (t) => {
+test("scheduling: pane discovery cannot delay active status replay", async (t) => {
   const h = harness(t, { statusReplayIntervalMs: 5 });
   const held = h.hold((_command, args) => args[1] === "list-panes");
   h.fire("agent_start");
@@ -158,7 +158,7 @@ test("scheduling: a failed status pipe does not block the next transition", asyn
   assert.equal(modes(h).at(-1), "working");
 });
 
-test("scheduling: an unexpected title clock failure does not stop later status", async (t) => {
+test("scheduling: an unexpected binding clock failure does not stop later status", async (t) => {
   let failed = false;
   const h = harness(t, { now: () => {
     if (failed) throw new Error("clock failed");
@@ -179,9 +179,8 @@ test("scheduling: viewing a done tab publishes base to every sidebar instance", 
   h.setActive(true);
   await h.tick(5);
   assert.equal(modes(h).at(-1), "base");
-  const writes = h.writes.length;
   await h.tick(60_000);
-  assert.equal(h.writes.length, writes, "seen polling must not animate the title");
+  assert.deepEqual(h.writes, [], "seen polling must not rename the tab");
 });
 
 test("scheduling: interactive input clears done but extension input does not", async (t) => {

@@ -1,19 +1,14 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { homedir } from "node:os";
 import type { ExecFileAsyncFn } from "./commands.ts";
 import { pathsMatch } from "./ownership.ts";
-import { deriveTabTitle } from "./tab-title.ts";
 import { readOwningTabWith, readTabByIdWith } from "./zellij.ts";
 
 const VALIDATION_TTL_MS = 5_000;
-const TITLE_CACHE_TTL_MS = 30_000;
 const BIND_RETRY_ATTEMPTS = 20;
 
 export type TabBinding = {
   tabId: string;
   cwd: string;
-  baseName: string;
-  lastWrittenName: string | null;
   validatedAt: number;
 };
 
@@ -23,14 +18,6 @@ export function createTabBinding(
   retryDelay: () => Promise<void>,
 ) {
   let binding: TabBinding | null = null;
-  let titleCache: { cwd: string; title: string; at: number } | null = null;
-
-  async function title(cwd: string) {
-    if (titleCache?.cwd === cwd && now() - titleCache.at < TITLE_CACHE_TTL_MS) return titleCache.title;
-    const value = await deriveTabTitle(cwd, homedir(), exec);
-    titleCache = { cwd, title: value, at: now() };
-    return value;
-  }
 
   async function ensure(ctx: ExtensionContext, valid: () => boolean) {
     if (binding && pathsMatch(binding.cwd, ctx.cwd) && now() - binding.validatedAt < VALIDATION_TTL_MS) return binding;
@@ -44,9 +31,7 @@ export function createTabBinding(
           return binding;
         }
         const cwd = owner.paneCwd ?? ctx.cwd;
-        const baseName = await title(cwd);
-        if (!valid()) return null;
-        binding = { tabId: owner.tabId, cwd, baseName, lastWrittenName: owner.name, validatedAt: now() };
+        binding = { tabId: owner.tabId, cwd, validatedAt: now() };
         return binding;
       }
       if (binding && pathsMatch(binding.cwd, ctx.cwd)) {
@@ -66,10 +51,8 @@ export function createTabBinding(
   return {
     current: () => binding,
     ensure,
-    title,
     clear() {
       binding = null;
-      titleCache = null;
     },
   };
 }

@@ -1,7 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { runCommand, type ExecFileAsyncFn } from "./commands.ts";
 import { parsePaneList, parseTabList, selectOwningPane, type ZellijTabInfo } from "./ownership.ts";
-import type { TabBinding } from "./tab-binding.ts";
 
 export type OwningTabInfo = ZellijTabInfo & { paneCwd: string | null };
 
@@ -34,25 +33,4 @@ export async function readTabByIdWith(exec: ExecFileAsyncFn, tabId: string): Pro
   } catch {
     return null;
   }
-}
-
-export function createTabWriter(exec: ExecFileAsyncFn, retryDelay: () => Promise<void>) {
-  async function rename(bound: TabBinding, name: string, valid: () => boolean) {
-    if (bound.lastWrittenName === name) return;
-    for (let attempt = 0; attempt < 2 && valid(); attempt++) {
-      try {
-        await runCommand(exec, "zellij", ["action", "rename-tab-by-id", bound.tabId, name]);
-        // Even an obsolete write reached Zellij. Record it so the next update
-        // cannot skip the corrective write based on an older cached name.
-        bound.lastWrittenName = name;
-        return;
-      } catch {
-        bound.lastWrittenName = null;
-        bound.validatedAt = Number.NEGATIVE_INFINITY;
-        if (attempt === 0 && valid()) await retryDelay();
-      }
-    }
-  }
-
-  return { rename };
 }

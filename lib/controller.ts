@@ -13,7 +13,7 @@ import {
 import { isInteractiveZellij } from "./status-model.ts";
 import { createStatusTransport } from "./status-transport.ts";
 import { createTabBinding } from "./tab-binding.ts";
-import { createTabWriter, readTabByIdWith } from "./zellij.ts";
+import { readTabByIdWith } from "./zellij.ts";
 
 const RETRY_DELAY_MS = 100;
 const STATUS_REPLAY_INTERVAL_MS = 5_000;
@@ -52,7 +52,6 @@ export function createTabStatusController(options: ZellijTabStatusOptions = {}) 
   const runtimeId = options.runtimeId ?? randomUUID();
   const firstPollDelayMs = options.seenPollFirstDelayMs ?? 250;
   const replayIntervalMs = options.statusReplayIntervalMs ?? STATUS_REPLAY_INTERVAL_MS;
-  const writer = createTabWriter(exec, retryDelay);
   const bindings = createTabBinding(exec, now, retryDelay);
   let target: Target | null = null;
   let worker: Promise<void> | null = null;
@@ -115,16 +114,6 @@ export function createTabStatusController(options: ZellijTabStatusOptions = {}) 
     return sent;
   }
 
-  async function refreshStaticTitle(snapshot: Target) {
-    const current = () => !closing && target === snapshot;
-    const bound = await bindings.ensure(snapshot.ctx, current);
-    if (!bound || !current()) return;
-    const baseName = await bindings.title(bound.cwd);
-    if (!current()) return;
-    bound.baseName = baseName;
-    await writer.rename(bound, baseName, current);
-  }
-
   function request(snapshot: Target) {
     pending = snapshot;
     if (worker) return;
@@ -135,10 +124,10 @@ export function createTabStatusController(options: ZellijTabStatusOptions = {}) 
         const sent = await publish(next);
         if (sent && pending === next) pending = null;
         if (target === next && pending === null) scheduleReplay();
-        await refreshStaticTitle(next);
+        await bindings.ensure(next.ctx, () => !closing && target === next);
       }
     }).catch(() => {
-      // Lifecycle hooks must not fail because status or title updates failed.
+      // Lifecycle hooks must not fail because status or binding updates failed.
     }).finally(() => {
       worker = null;
       if (pending && !closing) request(pending);
