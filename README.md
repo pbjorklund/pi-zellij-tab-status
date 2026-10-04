@@ -31,7 +31,7 @@ Update with `pi update git:github.com/pbjorklund/pi-zellij-tab-status`, then rel
 - Keeps work marked across automatic retries, queued follow-ups, and compaction recovery.
 - Publishes `compacting` during manual and automatic compaction, then restores the effective state after success, failure, or cancellation.
 - Publishes `done` once the parent has settled and all tracked subagents have finished. The visible sidebar clears it immediately; the extension confirms tab visibility with bounded backoff and publishes `base` so every sidebar instance converges.
-- Adds optional watch letters after the sidebar tab name: checklist `C`, improvement `I`, project tasks `P`, GitHub review `R`, and Sentry `S`. Enabled watchers appear in `CIPRS` order, including while waiting, paused, or in error. The spinner and unseen-completion marker remain independent. Canonical `watcher:af-watch-*` and `watcher:watch-*` events take precedence over legacy `watcher:cw/iw/pw/rw/sw` events for each letter; a canonical `off` stops stale legacy events from reviving a marker during rollout.
+- Publishes optional watcher letters in compatible `CIPRS` order: checklist `C`, improvement `I`, project tasks `P`, GitHub review `R`, and Sentry `S`. The sidebar displays only `CIRS`, as a prefix before the spinner or unseen-completion marker, for example `CIRS⠹ app` or `I● app`. A letter means non-off: polling, queued, working, waiting, paused, or error. Idle tabs keep their letters; letters do not imply agent work. Project-task `P` remains in the payload but is not shown. The spinner and unseen-completion marker remain independent. Canonical `watcher:af-watch-*` and `watcher:watch-*` events take precedence over legacy `watcher:cw/iw/pw/rw/sw` events for each letter; a canonical `off` stops stale legacy events from reviving a marker during rollout.
 - Publishes a runtime-specific removal during shutdown.
 - Never renames tabs, including at startup, settlement, and exit. Explicit user names stay intact. The sidebar owns automatic names from native pane cwd labels, without Git branch inference.
 - Coalesces event bursts and treats Zellij commands as best effort, so status failures do not block PI lifecycle hooks.
@@ -55,7 +55,7 @@ The extension broadcasts version 1 JSON through `zellij pipe --name pi_status`. 
 }
 ```
 
-`mode` is `base`, `working`, `compacting`, or `done`. An optional `watchers` string holds enabled letters in `CIPRS` order; it is omitted when no watcher is enabled. Snapshots with active work, unseen completion, or watchers are replayed with the same sequence number; existing sidebars ignore the duplicate while new sidebars accept it. Shutdown sends `kind: "remove"` with the same identity fields and no mode. Messages contain no prompt, command, cwd, tool argument, or conversation content.
+`mode` is `base`, `working`, `compacting`, or `done`. An optional `watchers` string holds non-off letters in `CIPRS` order; it is omitted when no watcher is enabled. The sidebar renders `CIRS` before the status marker and name, within the name's display-column budget. It takes the first non-plugin pane with status in the tab's pane manifest, not a union of all panes' watcher letters. Viewing the tab clears completion without clearing watchers. Snapshots with active work, unseen completion, or watchers are replayed with the same sequence number; existing sidebars ignore the duplicate while new sidebars accept it. Shutdown sends `kind: "remove"` with the same identity fields and no mode, clearing that runtime's status and watchers. Abrupt crashes have no promised status expiry. Messages contain no prompt, command, cwd, tool argument, or conversation content.
 
 ## Development
 
@@ -78,7 +78,7 @@ npm run test:smoke
 npm run test:e2e
 ```
 
-Each test starts a real PI TUI in a separate Zellij session with temporary configuration and no inherited credentials. These extension tests verify lifecycle handling, successful pipe publication, explicit user names surviving PI start, work, settlement, and exit, and cleanup. The `zellij-tabbar` repository's isolated live smoke test verifies status rendering, local animation, background completion, and clearing on view with the real WASM plugin.
+Each test starts a real PI TUI in a separate Zellij session with temporary configuration and no inherited credentials. These extension tests verify lifecycle handling, successful pipe publication, explicit user names surviving PI start, work, settlement, and exit, and cleanup. The `zellij-tabbar` repository's isolated live smoke test verifies exact watcher prefixes, idle/off/removal behavior, local animation, background completion, and clearing on view without losing watchers with the real WASM plugin. That suite requires the parked-tab Zellij fork; native Zellij 0.45.1 lacks `ParkTab`. It leaves existing sessions and installed plugins untouched.
 
 ### Structure
 

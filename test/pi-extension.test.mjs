@@ -91,6 +91,27 @@ test("watcher events publish sorted letters and clear them without changing the 
   assert.equal(h.pipes.at(-1).watchers, undefined);
 });
 
+test("restored watcher states publish on session start and idle changes without an agent turn", async (t) => {
+  const h = harness(t, { runtimeId: "restored-watchers" });
+  await h.emit("watcher:status", { key: "watcher:cw", status: "working" });
+  await h.emit("watcher:status", { key: "watcher:af-watch-checklist", status: "off" });
+  await h.emit("watcher:status", { key: "watcher:af-watch-improvement", status: "polling" });
+  await h.emit("session_start");
+  assert.equal(h.pipes.at(-1).mode, "base");
+  assert.equal(h.pipes.at(-1).watchers, "I");
+  for (const status of ["polling", "queued", "working", "waiting", "paused", "error"]) {
+    for (const key of ["watcher:af-watch-checklist", "watcher:af-watch-improvement", "watcher:watch-github-pr", "watcher:watch-sentry"]) {
+      await h.emit("watcher:status", { key, status });
+    }
+    assert.equal(h.pipes.at(-1).watchers, "CIRS", status);
+    assert.equal(h.pipes.at(-1).mode, "base", status);
+    for (const key of ["watcher:af-watch-checklist", "watcher:af-watch-improvement", "watcher:watch-github-pr", "watcher:watch-sentry"]) {
+      await h.emit("watcher:status", { key, status: "off" });
+    }
+    assert.equal(h.pipes.at(-1).watchers, undefined, status);
+  }
+});
+
 test("perf: transitions within the binding TTL do not repeat discovery or Git reads", async (t) => {
   const h = harness(t);
   await h.start();
