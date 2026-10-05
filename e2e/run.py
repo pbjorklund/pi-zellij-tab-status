@@ -193,6 +193,30 @@ exit "$status"
         self.assert_static_title()
         self.assertLess(elapsed, 0.25, f"PI shutdown took {elapsed:.3f}s")
 
+    def test_watchers_and_delegated_activity_notices_publish_independent_state(self):
+        def latest(mode, watchers):
+            messages = self.delivered_statuses()
+            return messages and messages[-1].get("mode") == mode and messages[-1].get("watchers", "") == watchers
+
+        letters = ""
+        for key, letter in [("af-watch-checklist", "C"), ("af-watch-improvement", "I"),
+                            ("af-watch-project-task", "P"), ("watch-github-pr", "R"), ("watch-sentry", "S")]:
+            letters += letter
+            self.send(f"/fixture watcher {key} polling")
+            self.wait(lambda: latest("base", letters), f"idle watcher {letter}")
+        for worker in ("checklist", "improvement", "sentry"):
+            self.send(f"/fixture worker {worker} started")
+            self.wait(lambda: latest("working", "CIPRS"), f"worker {worker} starts")
+        self.send("/fixture watcher af-watch-checklist off")
+        self.wait(lambda: latest("working", "IPRS"), "off preserves unrelated work")
+        for worker in ("checklist", "improvement"):
+            self.send(f"/fixture worker {worker} completed")
+            self.wait(lambda: latest("working", "IPRS"), f"worker {worker} finishes")
+        self.action("go-to-tab-name", "control")
+        self.send("/fixture worker sentry completed")
+        self.wait(lambda: latest("done", "IPRS"), "last delegated worker finishes")
+        self.assert_static_title()
+
     def test_modern_child_outlives_parent_without_title_animation(self):
         self.send("spawn")
         self.settled()

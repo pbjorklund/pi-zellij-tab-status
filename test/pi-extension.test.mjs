@@ -112,6 +112,56 @@ test("restored watcher states publish on session start and idle changes without 
   }
 });
 
+test("watcher activity notices track delegated workers independently of letters and parent work", async (t) => {
+  const h = harness(t);
+  await h.emit("session_start");
+  const notice = async (id, status) => {
+    h.appendEntry({ type: "custom_message", customType: "subagent_activity", details: { id, status } });
+    await h.tick(500);
+  };
+  for (const key of ["af-watch-checklist", "af-watch-improvement", "af-watch-project-task", "watch-github-pr", "watch-sentry"]) {
+    await h.emit("watcher:status", { key: `watcher:${key}`, status: "polling" });
+  }
+  assert.equal(h.pipes.at(-1).mode, "base");
+  for (const status of ["completed", "failed", "timed_out", "cancelled"]) {
+    await notice(`checklist-${status}`, "started");
+    await notice(`improvement-${status}`, "started");
+    await notice(`sentry-${status}`, "started");
+    await notice(`checklist-${status}`, status);
+    await h.emit("watcher:status", { key: "watcher:af-watch-checklist", status: "off" });
+    assert.equal(h.pipes.at(-1).watchers, "IPRS");
+    assert.equal(h.pipes.at(-1).mode, "working");
+    await notice(`improvement-${status}`, status);
+    assert.equal(h.pipes.at(-1).mode, "working");
+    await h.emit("agent_start");
+    await notice(`sentry-${status}`, status);
+    assert.equal(h.pipes.at(-1).mode, "working");
+    await h.emit("agent_settled");
+    assert.equal(h.pipes.at(-1).mode, "done");
+    assert.equal(h.pipes.at(-1).watchers, "IPRS");
+  }
+  const count = h.pipes.length;
+  for (const entry of [{ type: "message" }, { type: "custom_message", customType: "other" },
+    { type: "custom_message", customType: "subagent_activity" },
+    { type: "custom_message", customType: "subagent_activity", details: { id: "", status: "started" } },
+    { type: "custom_message", customType: "subagent_activity", details: { id: "unknown", status: "queued" } },
+  ]) h.appendEntry(entry);
+  await h.tick(500);
+  await notice("sentry", "completed");
+  assert.equal(h.pipes.length, count);
+  h.appendEntry({ type: "custom_message", customType: "subagent_activity", details: { id: "fast", status: "started" } });
+  h.appendEntry({ type: "custom_message", customType: "subagent_activity", details: { id: "fast", status: "completed" } });
+  await h.tick(500);
+  assert.equal(h.pipes.at(-1).mode, "done", "one scan preserves chronological notices");
+  for (const key of ["af-watch-improvement", "af-watch-project-task", "watch-github-pr", "watch-sentry"]) {
+    await h.emit("watcher:status", { key: `watcher:${key}`, status: "off" });
+  }
+  const reads = h.entryReads();
+  await h.tick(5_000);
+  assert.equal(h.entryReads(), reads, "no history polling after watchers and workers stop");
+  assert.deepEqual(h.writes, []);
+});
+
 test("perf: transitions within the binding TTL do not repeat discovery or Git reads", async (t) => {
   const h = harness(t);
   await h.start();

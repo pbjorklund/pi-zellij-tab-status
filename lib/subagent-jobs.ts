@@ -3,7 +3,7 @@ import { isInteractiveZellij } from "./status-model.ts";
 
 const COMPLETION_TYPE = "subagent_result";
 const ACTIVE_STATES = new Set(["started", "running", "stopping"]);
-const TERMINAL_STATES = new Set(["completed", "failed", "cancelled"]);
+const TERMINAL_STATES = new Set(["completed", "failed", "cancelled", "timed_out"]);
 const JOB_TOOLS = new Set(["subagent", "subagent_resume", "subagent_kill"]);
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -33,6 +33,7 @@ export function createSubagentJobObserver(
   let cursor: string | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
+  let watching = false;
 
   function stopTimer() {
     if (timer !== null) clearTimeout(timer);
@@ -56,23 +57,25 @@ export function createSubagentJobObserver(
     if (!session) return;
     const leaf = session.getLeafId();
     let id = leaf;
+    const updates: JobUpdate[] = [];
     while (id && id !== cursor) {
       const entry = session.getEntry(id);
       if (!entry) break;
-      if (entry.type === "custom_message" && entry.customType === COMPLETION_TYPE) {
+      if (entry.type === "custom_message" && [COMPLETION_TYPE, "subagent_activity"].includes(entry.customType)) {
         const job = parseJobUpdate(entry.details);
-        if (job?.active === false) observe(job);
+        if (job && (entry.customType === "subagent_activity" || !job.active)) updates.push(job);
       }
       id = entry.parentId;
     }
     cursor = leaf;
+    for (const update of updates.reverse()) observe(update);
   }
 
   function schedule() {
-    if (active.size === 0) stopTimer();
-    if (closed || active.size === 0 || timer !== null) return;
-    // Idle custom messages reach session history but not extension message hooks.
-    // Read only the new in-memory tail, and only while jobs remain active.
+    if (active.size === 0 && !watching) stopTimer();
+    if (closed || !ctx || !isInteractiveZellij(ctx) || (active.size === 0 && !watching) || timer !== null) return;
+    // Watcher workers start while the parent is idle, so read their notices
+    // from the new in-memory tail while watchers or known jobs are active.
     timer = setTimeout(() => {
       timer = null;
       readCompletions();
@@ -85,6 +88,12 @@ export function createSubagentJobObserver(
     start(context: ExtensionContext) {
       ctx = context;
       cursor = context.sessionManager?.getLeafId() ?? null;
+      schedule();
+    },
+    setWatching(value: boolean) {
+      watching = value;
+      readCompletions();
+      schedule();
     },
     toolEnd(event: ToolExecutionEndEvent, context: ExtensionContext) {
       if (closed || !isInteractiveZellij(context) || event.isError || !JOB_TOOLS.has(event.toolName)) return;

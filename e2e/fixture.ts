@@ -86,7 +86,16 @@ export default function fixture(pi: ExtensionAPI) {
         customType: "subagent_result", content: "Child completed.", display: false,
         details: { id: "modern-child", status: "completed" },
       }, { triggerTurn: false });
-      else if (args === "shutdown") ctx.shutdown();
+      else if (args.startsWith("watcher ")) {
+        const [, key, status] = args.split(" ");
+        pi.events.emit("watcher:status", { key: `watcher:${key}`, status });
+      } else if (args.startsWith("worker ")) {
+        const [, id, status] = args.split(" ");
+        pi.sendMessage({
+          customType: "subagent_activity", content: `Worker ${status}.`, display: false,
+          details: { id, status },
+        }, { triggerTurn: false, deliverAs: "steer" });
+      } else if (args === "shutdown") ctx.shutdown();
       else throw new Error(`Unknown fixture command: ${args}`);
     },
   });

@@ -34,9 +34,11 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
     if (!WATCHERS.some(([, canonical, legacy]) => canonical === key || legacy === key) || typeof status !== "string" ||
       !["off", "polling", "queued", "working", "waiting", "paused", "error"].includes(status)) return;
     watcherStatuses.set(key as string, status);
-    controller.setWatchers(currentCtx, WATCHERS.filter(([, canonical, legacy]) =>
+    const letters = WATCHERS.filter(([, canonical, legacy]) =>
       (watcherStatuses.get(canonical) ?? watcherStatuses.get(legacy) ?? "off") !== "off",
-    ).map(([letter]) => letter).join(""));
+    ).map(([letter]) => letter).join("");
+    controller.setWatchers(currentCtx, letters);
+    jobs.setWatching(letters.length > 0);
   });
 
   function showActivity(ctx: ExtensionContext, mode: TabMode) {
