@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createTabStatusController, type ZellijTabStatusOptions } from "./lib/controller.ts";
+import { createTabStatusController, type ZellijTabStatusOptions, type WatcherDetail, type WatcherStates } from "./lib/controller.ts";
 import { createActivityState, parseSubagentId, type TabMode } from "./lib/activity.ts";
 import { createSubagentJobObserver } from "./lib/subagent-jobs.ts";
 
@@ -26,18 +26,24 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
   const activity = createActivityState();
   let currentCtx: ExtensionContext | null = null;
   let closed = false;
-  const watcherStatuses = new Map<string, string>();
+  const watcherStatuses = new Map<string, WatcherDetail>();
 
   pi.events?.on?.("watcher:status", (data: unknown) => {
     if (closed || !data || typeof data !== "object") return;
-    const { key, status } = data as { key?: unknown; status?: unknown };
+    const { key, status, waitingKind } = data as { key?: unknown; status?: unknown; waitingKind?: unknown };
     if (!WATCHERS.some(([, canonical, legacy]) => canonical === key || legacy === key) || typeof status !== "string" ||
       !["off", "polling", "queued", "working", "waiting", "paused", "error"].includes(status)) return;
-    watcherStatuses.set(key as string, status);
-    const letters = WATCHERS.filter(([, canonical, legacy]) =>
-      (watcherStatuses.get(canonical) ?? watcherStatuses.get(legacy) ?? "off") !== "off",
-    ).map(([letter]) => letter).join("");
-    controller.setWatchers(currentCtx, letters);
+    watcherStatuses.set(key as string, {
+      status: status as WatcherDetail["status"],
+      ...(status === "waiting" ? { waiting_kind: waitingKind === "human" ? "human" : "other" } as const : {}),
+    });
+    const detail: WatcherStates = {};
+    for (const [letter, canonical, legacy] of WATCHERS) {
+      const value = watcherStatuses.get(canonical) ?? watcherStatuses.get(legacy);
+      if (value && value.status !== "off") detail[letter] = value;
+    }
+    const letters = Object.keys(detail).join("");
+    controller.setWatchers(currentCtx, letters, detail);
     jobs.setWatching(letters.length > 0);
   });
 

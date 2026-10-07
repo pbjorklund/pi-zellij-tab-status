@@ -14,8 +14,8 @@ test("publisher: lifecycle transitions use snapshots instead of animated tab ren
     command === "zellij" && args[0] === "pipe" && !args.includes("action"));
   assert.ok(pipeCalls.length > 0);
   assert.ok(pipeCalls.every(({ options }) => options.stdio === "ignore"));
-  const base = { v: 1, kind: "snapshot", runtime_id: "run-1", seq: 1, pane_id: 248, mode: "base" };
-  const working = { v: 1, kind: "snapshot", runtime_id: "run-1", seq: 2, pane_id: 248, mode: "working" };
+  const base = { v: 1, kind: "snapshot", runtime_id: "run-1", seq: 1, pane_id: 248, mode: "base", folder: "repo" };
+  const working = { v: 1, kind: "snapshot", runtime_id: "run-1", seq: 2, pane_id: 248, mode: "working", folder: "repo" };
   assert.deepEqual(h.pipes, [base, working, working]);
 });
 

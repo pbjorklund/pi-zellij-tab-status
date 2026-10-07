@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { basename } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TabMode } from "./activity.ts";
 
@@ -29,7 +30,12 @@ export type ZellijTabStatusOptions = {
   seenPollFirstDelayMs?: number;
 };
 
-type Target = { ctx: ExtensionContext; mode: TabMode; watchers: string };
+export type WatcherDetail = {
+  status: "off" | "polling" | "queued" | "working" | "waiting" | "paused" | "error";
+  waiting_kind?: "human" | "other";
+};
+export type WatcherStates = Record<string, WatcherDetail>;
+type Target = { ctx: ExtensionContext; mode: TabMode; watchers: string; watcherStates: WatcherStates; folder: string };
 type StatusSnapshot = {
   v: 1;
   kind: "snapshot";
@@ -38,6 +44,8 @@ type StatusSnapshot = {
   pane_id: number;
   mode: TabMode;
   watchers?: string;
+  watcher_states?: WatcherStates;
+  folder: string;
 };
 
 export function createTabStatusController(options: ZellijTabStatusOptions = {}) {
@@ -67,6 +75,7 @@ export function createTabStatusController(options: ZellijTabStatusOptions = {}) 
   let delivered: Target | null = null;
   let latestSnapshot: StatusSnapshot | null = null;
   let watchers = "";
+  let watcherStates: WatcherStates = {};
 
   const paneId = () => {
     const value = Number(process.env.ZELLIJ_PANE_ID);
@@ -107,6 +116,8 @@ export function createTabStatusController(options: ZellijTabStatusOptions = {}) 
       pane_id: id,
       mode: snapshot.mode,
       ...(snapshot.watchers ? { watchers: snapshot.watchers } : {}),
+      ...(Object.keys(snapshot.watcherStates).length ? { watcher_states: snapshot.watcherStates } : {}),
+      folder: snapshot.folder,
     };
     latestSnapshot = message;
     const sent = await statusTransport.send(message);
@@ -139,7 +150,7 @@ export function createTabStatusController(options: ZellijTabStatusOptions = {}) 
   }
 
   function scheduleReplay() {
-    if (closing || replayTimer !== null || (target?.mode === "base" && !target.watchers) || latestSnapshot === null) return;
+    if (closing || replayTimer !== null || latestSnapshot === null) return;
     const snapshot = target;
     const message = latestSnapshot;
     replayTimer = setTimeout(async () => {
@@ -171,14 +182,16 @@ export function createTabStatusController(options: ZellijTabStatusOptions = {}) 
 
   function setMode(ctx: ExtensionContext, mode: TabMode) {
     if (closing || !isInteractiveZellij(ctx)) return;
-    if (target?.mode === mode && target.watchers === watchers && target.ctx.cwd === ctx.cwd) {
+    const folder = basename(ctx.cwd) || "/";
+    if (target?.mode === mode && target.watchers === watchers && target.ctx.cwd === ctx.cwd && target.folder === folder &&
+      JSON.stringify(target.watcherStates) === JSON.stringify(watcherStates)) {
       if (delivered !== target) {
         stopReplayTimer();
         request(target);
       }
       return;
     }
-    target = { ctx, mode, watchers };
+    target = { ctx, mode, watchers, watcherStates, folder };
     stopSeenTimer();
     stopReplayTimer();
     pollDelayMs = firstPollDelayMs;
@@ -188,9 +201,10 @@ export function createTabStatusController(options: ZellijTabStatusOptions = {}) 
 
   return {
     setMode,
-    setWatchers(ctx: ExtensionContext | null, value: string) {
-      if (closing || watchers === value) return;
+    setWatchers(ctx: ExtensionContext | null, value: string, detail: WatcherStates = {}) {
+      if (closing || (watchers === value && JSON.stringify(watcherStates) === JSON.stringify(detail))) return;
       watchers = value;
+      watcherStates = detail;
       if (ctx && target) setMode(ctx, target.mode);
     },
     clearDone(ctx: ExtensionContext) {

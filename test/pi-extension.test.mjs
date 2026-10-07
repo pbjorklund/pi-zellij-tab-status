@@ -4,6 +4,27 @@ import { harness } from "./helpers/lifecycle.mjs";
 
 const modes = (h) => h.pipes.flatMap((message) => message.kind === "snapshot" ? [message.mode] : []);
 
+test("watcher detail changes publish while idle and carry only the folder basename", async (t) => {
+  const h = harness(t, { ctx: { cwd: "/projects/backoffice" } });
+  await h.emit("session_start");
+  assert.equal(h.pipes.at(-1).folder, "backoffice");
+  await h.emit("watcher:status", { key: "watcher:af-watch-project-task", status: "working" });
+  await h.emit("watcher:status", { key: "watcher:af-watch-checklist", status: "error" });
+  assert.deepEqual(h.pipes.at(-1).watcher_states, { C: { status: "error" }, P: { status: "working" } });
+  const seq = h.pipes.at(-1).seq;
+  await h.emit("watcher:status", { key: "watcher:af-watch-project-task", status: "polling" });
+  assert.ok(h.pipes.at(-1).seq > seq);
+  assert.equal(h.pipes.at(-1).mode, "base");
+  assert.equal(h.pipes.at(-1).watcher_states.P.status, "polling");
+  await h.emit("watcher:status", { key: "watcher:af-watch-project-task", status: "waiting", waitingKind: "human" });
+  assert.deepEqual(h.pipes.at(-1).watcher_states.P, { status: "waiting", waiting_kind: "human" });
+  await h.emit("watcher:status", { key: "watcher:af-watch-project-task", status: "waiting", waitingKind: "invalid" });
+  assert.deepEqual(h.pipes.at(-1).watcher_states.P, { status: "waiting", waiting_kind: "other" });
+  await h.emit("watcher:status", { key: "watcher:af-watch-checklist", status: "off" });
+  await h.emit("watcher:status", { key: "watcher:af-watch-project-task", status: "off" });
+  assert.equal(h.pipes.at(-1).watcher_states, undefined);
+});
+
 test("lifecycle: compaction and settlement publish semantic transitions", async (t) => {
   const h = harness(t, { runtimeId: "lifecycle" });
   await h.start();
@@ -35,14 +56,15 @@ test("replay: active work republishes the same snapshot for new sidebars", async
   assert.equal(h.writes.length, writes);
 });
 
-test("replay: base state produces no periodic transport", async (t) => {
+test("replay: idle folder metadata reaches newly loaded sidebars without discovery", async (t) => {
   const h = harness(t, { statusReplayIntervalMs: 5 });
   await h.emit("session_start");
-  const calls = h.calls.length;
-
-  await h.tick(60_000);
-
-  assert.equal(h.calls.length, calls);
+  const snapshot = h.pipes.at(-1);
+  const discovery = h.calls.filter(({ args }) => args[0] !== "pipe").length;
+  await h.tick(5);
+  assert.deepEqual(h.pipes.at(-1), snapshot);
+  assert.equal(h.pipes.length, 2);
+  assert.equal(h.calls.filter(({ args }) => args[0] !== "pipe").length, discovery);
 });
 
 test("renamed watcher identities preserve one sorted letter each and canonical off overrides stale aliases", async (t) => {
