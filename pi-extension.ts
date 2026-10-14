@@ -22,6 +22,8 @@ const WATCHERS = [
 ] as const;
 
 export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabStatusOptions = {}) {
+  if (!process.env.ZELLIJ) return;
+
   const controller = createTabStatusController(options);
   const activity = createActivityState();
   let currentCtx: ExtensionContext | null = null;
