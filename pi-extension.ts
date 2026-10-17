@@ -26,10 +26,9 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
   const widget = (ctx: ExtensionContext, mode?: TabMode) => {
     if (ctx.mode !== "tui" || !ctx.hasUI) return;
     const pane = Number(process.env.ZELLIJ_PANE_ID);
-    const availability = !process.env.ZELLIJ ? "unavailable | outside Zellij"
-      : !process.env.ZELLIJ_PANE_ID?.trim() || !Number.isSafeInteger(pane) || pane < 0 ? "unavailable | missing pane identity"
-      : `available | activity ${mode ?? "base"} | sidebar delivery not verified`;
-    ctx.ui?.setWidget?.("pi-zellij-tab-status", ["Zellij: " + availability]);
+    const visible = process.env.ZELLIJ && process.env.ZELLIJ_PANE_ID?.trim() && Number.isSafeInteger(pane) && pane >= 0
+      && (mode === "working" || mode === "compacting");
+    ctx.ui?.setWidget?.("pi-zellij-tab-status", visible ? [`Zellij: ${mode}`] : undefined);
   };
   const clearBar = () => {
     if (barCtx?.mode === "tui" && barCtx.hasUI) barCtx.ui?.setWidget?.("pi-zellij-tab-status", undefined);
