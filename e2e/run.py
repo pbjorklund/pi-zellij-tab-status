@@ -19,7 +19,7 @@ STATUS_PREFIX = re.compile(r"^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◐◓◑◒●] ")
 
 class LiveTabStatus(unittest.TestCase):
     def setUp(self):
-        for command in ("pi", "zellij", "git", "script"):
+        for command in ("pi", "zellij", "git", "script", "flock"):
             self.assertIsNotNone(shutil.which(command), f"Install {command} to run live E2E tests")
         real_zellij = shutil.which("zellij")
         # Keep Zellij's Unix socket path below the platform length limit.
@@ -34,7 +34,11 @@ class LiveTabStatus(unittest.TestCase):
         bin_dir.mkdir()
         self.deliveries = self.home / "pi-status-deliveries.jsonl"
         wrapper = bin_dir / "zellij"
+        # Concurrent CLI clients can race Zellij 0.45's reused client IDs during discovery.
+        # Serialize the fixture and extension commands, without retrying failed commands.
         wrapper.write_text('''#!/bin/sh
+exec 9>"$TAB_STATUS_E2E_DIR/zellij-cli.lock"
+flock -x 9 || exit "$?"
 "$REAL_ZELLIJ" "$@"
 status=$?
 if [ "$status" -eq 0 ] && [ "$1" = "pipe" ]; then
@@ -74,7 +78,8 @@ exit "$status"
             "--provider", "tab-status-fixture", "--model", "fixture", "--thinking", "off",
             "--system-prompt", "This is an offline deterministic test.",
         ]
-        command = ["zellij", "--config", str(config), "--session", self.session]
+        # The attached client is long-lived; only short-lived CLI clients share the lock.
+        command = [real_zellij, "--config", str(config), "--session", self.session]
         self.terminal = self.home / "terminal.log"
         log = self.terminal.open("wb")
         self.addCleanup(log.close)

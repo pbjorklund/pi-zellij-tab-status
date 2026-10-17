@@ -77,14 +77,14 @@ CI enforces at least 95% aggregate line, branch, and function coverage across `p
 
 ### Live smoke and E2E tests
 
-On Linux, install PI, Zellij, Node.js 24+, Python 3, Git, and util-linux's `script` command, then run:
+On Linux, install PI, Zellij, Node.js 24+, Python 3, Git, and util-linux's `script` and `flock` commands, then run:
 
 ```bash
 npm run test:smoke
 npm run test:e2e
 ```
 
-Each test starts a real PI TUI in a separate Zellij session with temporary configuration and no inherited credentials. These extension tests verify lifecycle handling, successful pipe publication, explicit user names surviving PI start, work, settlement, and exit, and cleanup. The `zellij-tabbar` repository's isolated live smoke test verifies exact watcher badges, idle/off/removal behavior, local animation, background completion, and clearing on view without losing watchers with the real WASM plugin. That suite runs against upstream Zellij 0.45.1. It leaves existing sessions and installed plugins untouched.
+Each test starts a real PI TUI in a separate Zellij session with temporary configuration and no inherited credentials. A per-test lock serializes fixture CLI actions and extension status pipes: concurrent clients can hit Zellij 0.45's client-ID reuse race and falsely report "There is no active session!" while the session remains alive. The attached TUI client stays outside that lock. Failed commands still fail immediately; tests do not retry them. These extension tests verify lifecycle handling, successful pipe publication, explicit user names surviving PI start, work, settlement, and exit, and cleanup. The `zellij-tabbar` repository's isolated live smoke test verifies exact watcher badges, idle/off/removal behavior, local animation, background completion, and clearing on view without losing watchers with the real WASM plugin. That suite runs against upstream Zellij 0.45.1. It leaves existing sessions and installed plugins untouched.
 
 ### Structure
 
