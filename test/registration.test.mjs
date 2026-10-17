@@ -4,7 +4,7 @@ import extension from "../pi-extension.ts";
 import { harness } from "./helpers/lifecycle.mjs";
 
 for (const zellij of [undefined, ""]) {
-  test(`does not register or initialize outside Zellij (${zellij === undefined ? "unset" : "empty"})`, (t) => {
+  test(`registers only passive bar lifecycle outside Zellij (${zellij === undefined ? "unset" : "empty"})`, (t) => {
     const oldEnv = { ZELLIJ: process.env.ZELLIJ, ZELLIJ_PANE_ID: process.env.ZELLIJ_PANE_ID };
     t.after(() => {
       for (const [key, value] of Object.entries(oldEnv)) {
@@ -25,7 +25,7 @@ for (const zellij of [undefined, ""]) {
       events: { on: (name) => registrations.push(name) },
     }, options);
 
-    assert.deepEqual(registrations, []);
+    assert.deepEqual(registrations, ["session_start", "session_shutdown"]);
   });
 }
 

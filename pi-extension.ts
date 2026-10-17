@@ -22,7 +22,29 @@ const WATCHERS = [
 ] as const;
 
 export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabStatusOptions = {}) {
-  if (!process.env.ZELLIJ) return;
+  let barCtx: ExtensionContext | undefined;
+  const widget = (ctx: ExtensionContext, mode?: TabMode) => {
+    if (ctx.mode !== "tui" || !ctx.hasUI) return;
+    const pane = Number(process.env.ZELLIJ_PANE_ID);
+    const availability = !process.env.ZELLIJ ? "unavailable | outside Zellij"
+      : !process.env.ZELLIJ_PANE_ID?.trim() || !Number.isSafeInteger(pane) || pane < 0 ? "unavailable | missing pane identity"
+      : `available | activity ${mode ?? "base"} | sidebar delivery not verified`;
+    ctx.ui?.setWidget?.("pi-zellij-tab-status", ["Zellij: " + availability]);
+  };
+  const clearBar = () => {
+    if (barCtx?.mode === "tui" && barCtx.hasUI) barCtx.ui?.setWidget?.("pi-zellij-tab-status", undefined);
+    barCtx = undefined;
+  };
+  const startBar = (ctx: ExtensionContext) => {
+    clearBar();
+    barCtx = ctx;
+    widget(ctx, "base");
+  };
+  if (!process.env.ZELLIJ) {
+    pi.on("session_start", (_event, ctx) => startBar(ctx));
+    pi.on("session_shutdown", clearBar);
+    return;
+  }
 
   const controller = createTabStatusController(options);
   const activity = createActivityState();
@@ -50,6 +72,8 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
   });
 
   function showActivity(ctx: ExtensionContext, mode: TabMode) {
+    if (closed) return;
+    widget(ctx, mode);
     currentCtx = ctx;
     controller.setMode(ctx, mode);
   }
@@ -59,6 +83,7 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
   });
 
   pi.on("session_start", (_event, ctx) => {
+    startBar(ctx);
     jobs.start(ctx);
     showActivity(ctx, activity.mode());
   });
@@ -92,6 +117,7 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
     if (event.source !== "extension" && !activity.hasActiveWork()) controller.clearDone(ctx);
   });
   pi.on("session_shutdown", () => {
+    clearBar();
     closed = true;
     jobs.close();
     activity.reset();

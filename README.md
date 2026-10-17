@@ -40,6 +40,8 @@ Subagent tracking consumes `subagent_activity` custom messages from delegated ch
 
 The extension needs PI 0.87.0 or newer and a Zellij version that provides `list-panes`, `list-tabs`, and `pipe`. Status markers require the matching custom sidebar; Zellij's built-in horizontal tab bar keeps its normal name but does not show PI status.
 
+PI's TUI also shows a `pi-zellij-tab-status` info bar with environment availability and local agent activity. Outside Zellij or without a usable pane identity, it reports unavailable. Availability does not verify sidebar delivery. The bar uses its own widget key, coexists with watcher and utility bars, and is removed on shutdown. It adds no Zellij commands, timers, or mutations. RPC, JSON, and print modes do not render it.
+
 ## Status protocol
 
 The extension broadcasts version 1 JSON through `zellij pipe --name pi_status`. A snapshot has this shape:
