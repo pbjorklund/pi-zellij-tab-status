@@ -128,16 +128,3 @@ test("work tracker: duplicate starts, unknown ends, invalid ids, and reset", () 
   assert.equal(work.hasActiveWork(), false);
   assert.equal(work.activeSubagentCount(), 0);
 });
-
-test("markers: detection and stripping round-trip every animation frame", () => {
-  for (let frame = 0; frame < 20; frame++) {
-    const working = status.formatWorkingTabName("repo:main", frame);
-    const compacting = status.formatCompactingTabName("repo:main", frame);
-    assert.equal(status.isWorkingTabName(working), true);
-    assert.equal(status.isCompactingTabName(compacting), true);
-    assert.equal(status.stripPiTabPrefix(`  ${working}`), "repo:main");
-    assert.equal(status.stripPiTabPrefix(compacting), "repo:main");
-  }
-  assert.equal(status.isWorkingTabName("● repo:main"), false);
-  assert.equal(status.isCompactingTabName("repo:main"), false);
-});

@@ -15,9 +15,9 @@ type JobUpdate = { id: string; active: boolean };
 
 export function parseJobUpdate(value: unknown): JobUpdate | null {
   const job = record(value);
-  const id = typeof job?.id === "string" ? job.id : job?.jobId;
+  const id = job?.id;
   if (typeof id !== "string" || !id.trim()) return null;
-  const state = typeof job.status === "string" ? job.status : job.state;
+  const state = job.status;
   if (typeof state === "string" && ACTIVE_STATES.has(state)) return { id, active: true };
   if (typeof state === "string" && TERMINAL_STATES.has(state)) return { id, active: false };
   return null;

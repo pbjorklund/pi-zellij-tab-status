@@ -6,19 +6,15 @@ import { createSubagentJobObserver } from "./lib/subagent-jobs.ts";
 export type { ZellijTabStatusOptions } from "./lib/controller.ts";
 export type { ZellijTabInfo } from "./lib/ownership.ts";
 export { parseTabInfo, parseTabList, parsePaneInfo, parsePaneList, selectOwningPane } from "./lib/ownership.ts";
-export { truncateWithEllipsis, formatGitTabTitle, deriveTabTitle } from "./lib/tab-title.ts";
-export {
-  stripPiTabPrefix, formatWorkingTabName, formatCompactingTabName, formatDoneTabName,
-  isWorkingTabName, isCompactingTabName, isInteractiveZellij,
-} from "./lib/status-model.ts";
+export { isInteractiveZellij } from "./lib/status-model.ts";
 export { parseSubagentId, createWorkTracker } from "./lib/activity.ts";
 
 const WATCHERS = [
-  ["C", "watcher:af-watch-checklist", "watcher:cw"],
-  ["I", "watcher:af-watch-improvement", "watcher:iw"],
-  ["P", "watcher:af-watch-project-task", "watcher:pw"],
-  ["R", "watcher:watch-github-pr", "watcher:rw"],
-  ["S", "watcher:watch-sentry", "watcher:sw"],
+  ["C", "watcher:af-watch-checklist"],
+  ["I", "watcher:af-watch-improvement"],
+  ["P", "watcher:af-watch-project-task"],
+  ["R", "watcher:watch-github-pr"],
+  ["S", "watcher:watch-sentry"],
 ] as const;
 
 export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabStatusOptions = {}) {
@@ -54,15 +50,15 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
   pi.events?.on?.("watcher:status", (data: unknown) => {
     if (closed || !data || typeof data !== "object") return;
     const { key, status, waitingKind } = data as { key?: unknown; status?: unknown; waitingKind?: unknown };
-    if (!WATCHERS.some(([, canonical, legacy]) => canonical === key || legacy === key) || typeof status !== "string" ||
+    if (!WATCHERS.some(([, canonical]) => canonical === key) || typeof status !== "string" ||
       !["off", "polling", "queued", "working", "waiting", "paused", "error"].includes(status)) return;
     watcherStatuses.set(key as string, {
       status: status as WatcherDetail["status"],
       ...(status === "waiting" ? { waiting_kind: waitingKind === "human" ? "human" : "other" } as const : {}),
     });
     const detail: WatcherStates = {};
-    for (const [letter, canonical, legacy] of WATCHERS) {
-      const value = watcherStatuses.get(canonical) ?? watcherStatuses.get(legacy);
+    for (const [letter, canonical] of WATCHERS) {
+      const value = watcherStatuses.get(canonical);
       if (value && value.status !== "off") detail[letter] = value;
     }
     const letters = Object.keys(detail).join("");

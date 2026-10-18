@@ -24,8 +24,6 @@ export type ZellijTabStatusOptions = {
   spawnIgnored?: SpawnIgnoredFn;
   now?: () => number;
   runtimeId?: string;
-  // Retained for callers that configured the former title-animation controller.
-  spinnerIntervalMs?: number;
   statusReplayIntervalMs?: number;
   seenPollFirstDelayMs?: number;
 };
@@ -43,7 +41,6 @@ type StatusSnapshot = {
   seq: number;
   pane_id: number;
   mode: TabMode;
-  watchers?: string;
   watcher_states?: WatcherStates;
   folder: string;
 };
@@ -115,7 +112,6 @@ export function createTabStatusController(options: ZellijTabStatusOptions = {}) 
       seq: ++seq,
       pane_id: id,
       mode: snapshot.mode,
-      ...(snapshot.watchers ? { watchers: snapshot.watchers } : {}),
       ...(Object.keys(snapshot.watcherStates).length ? { watcher_states: snapshot.watcherStates } : {}),
       folder: snapshot.folder,
     };

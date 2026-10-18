@@ -11,16 +11,13 @@ for (const [status, active] of [
   });
 }
 
-test("subagent updates: legacy job-shaped data remains readable during transition", () => {
-  assert.deepEqual(parseJobUpdate({ jobId: "child", state: "running" }), { id: "child", active: true });
-});
-
 test("subagent updates: malformed and unknown payloads cannot change activity", () => {
   for (const value of [
     null, undefined, 1, "child", [], {}, { id: "child" },
     { id: "child", status: "unknown" }, { id: "child", status: true },
     { id: 1, status: "started" }, { id: " ", status: "started" },
     { id: "", status: "completed" },
+    { jobId: "child", state: "running" }, { id: "child", state: "running" },
   ]) {
     assert.equal(parseJobUpdate(value), null, JSON.stringify(value));
   }

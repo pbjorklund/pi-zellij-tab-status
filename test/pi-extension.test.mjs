@@ -67,70 +67,59 @@ test("replay: idle folder metadata reaches newly loaded sidebars without discove
   assert.equal(h.calls.filter(({ args }) => args[0] !== "pipe").length, discovery);
 });
 
-test("renamed watcher identities preserve one sorted letter each and canonical off overrides stale aliases", async (t) => {
-  const h = harness(t, { runtimeId: "renamed-watchers" });
+test("obsolete watcher aliases cannot enable or revive watcher state", async (t) => {
+  const h = harness(t);
   await h.emit("session_start");
-  const pairs = [
-    ["watcher:cw", "watcher:af-watch-checklist", "C"],
-    ["watcher:iw", "watcher:af-watch-improvement", "I"],
-    ["watcher:pw", "watcher:af-watch-project-task", "P"],
-    ["watcher:rw", "watcher:watch-github-pr", "R"],
-    ["watcher:sw", "watcher:watch-sentry", "S"],
-  ];
-  for (const [legacy, canonical] of pairs) {
-    await h.emit("watcher:status", { key: legacy, status: "working" });
-    await h.emit("watcher:status", { key: canonical, status: "working" });
+  for (const key of ["watcher:cw", "watcher:iw", "watcher:pw", "watcher:rw", "watcher:sw"]) {
+    await h.emit("watcher:status", { key, status: "working" });
   }
-  assert.equal(h.pipes.at(-1).watchers, "CIPRS");
-  for (const [, canonical] of pairs) await h.emit("watcher:status", { key: canonical, status: "off" });
-  assert.equal(h.pipes.at(-1).watchers, undefined);
-  for (const [legacy, canonical, letter] of pairs) {
-    await h.emit("watcher:status", { key: legacy, status: "working" });
-    assert.equal(h.pipes.at(-1).watchers, undefined, `${letter} must not reappear from a stale alias`);
-    await h.emit("watcher:status", { key: canonical, status: "paused" });
-    assert.equal(h.pipes.at(-1).watchers, letter);
-    await h.emit("watcher:status", { key: canonical, status: "off" });
-  }
+  assert.equal(h.pipes.length, 1);
+  await h.emit("watcher:status", { key: "watcher:af-watch-checklist", status: "working" });
+  assert.deepEqual(h.pipes.at(-1).watcher_states, { C: { status: "working" } });
+  await h.emit("watcher:status", { key: "watcher:af-watch-checklist", status: "off" });
+  await h.emit("watcher:status", { key: "watcher:cw", status: "working" });
+  assert.equal(h.pipes.at(-1).watcher_states, undefined);
   assert.equal(h.pipes.at(-1).watchers, undefined);
 });
 
 test("watcher events publish sorted letters and clear them without changing the agent mode", async (t) => {
   const h = harness(t, { runtimeId: "watch-test", statusReplayIntervalMs: 5 });
   await h.emit("session_start");
-  await h.emit("watcher:status", { key: "watcher:sw", status: "working" });
-  await h.emit("watcher:status", { key: "watcher:cw", status: "polling" });
+  await h.emit("watcher:status", { key: "watcher:watch-sentry", status: "working" });
+  await h.emit("watcher:status", { key: "watcher:af-watch-checklist", status: "polling" });
   assert.equal(h.pipes.at(-1).mode, "base");
-  assert.equal(h.pipes.at(-1).watchers, "CS");
+  assert.deepEqual(h.pipes.at(-1).watcher_states, { C: { status: "polling" }, S: { status: "working" } });
   const count = h.pipes.length;
-  await h.emit("watcher:status", { key: "watcher:cw", status: "polling" });
+  await h.emit("watcher:status", { key: "watcher:af-watch-checklist", status: "polling" });
   await h.emit("watcher:status", { key: "not-a-watcher", status: "working" });
   assert.equal(h.pipes.length, count);
   await h.tick(5);
   assert.deepEqual(h.pipes.at(-1), h.pipes.at(-2), "base watcher status is replayed for a late sidebar");
-  await h.emit("watcher:status", { key: "watcher:sw", status: "off" });
-  assert.equal(h.pipes.at(-1).watchers, "C");
-  await h.emit("watcher:status", { key: "watcher:cw", status: "off" });
-  assert.equal(h.pipes.at(-1).watchers, undefined);
+  await h.emit("watcher:status", { key: "watcher:watch-sentry", status: "off" });
+  assert.deepEqual(h.pipes.at(-1).watcher_states, { C: { status: "polling" } });
+  await h.emit("watcher:status", { key: "watcher:af-watch-checklist", status: "off" });
+  assert.equal(h.pipes.at(-1).watcher_states, undefined);
 });
 
 test("restored watcher states publish on session start and idle changes without an agent turn", async (t) => {
   const h = harness(t, { runtimeId: "restored-watchers" });
-  await h.emit("watcher:status", { key: "watcher:cw", status: "working" });
+  await h.emit("watcher:status", { key: "watcher:af-watch-checklist", status: "working" });
   await h.emit("watcher:status", { key: "watcher:af-watch-checklist", status: "off" });
   await h.emit("watcher:status", { key: "watcher:af-watch-improvement", status: "polling" });
   await h.emit("session_start");
   assert.equal(h.pipes.at(-1).mode, "base");
-  assert.equal(h.pipes.at(-1).watchers, "I");
+  assert.deepEqual(h.pipes.at(-1).watcher_states, { I: { status: "polling" } });
   for (const status of ["polling", "queued", "working", "waiting", "paused", "error"]) {
     for (const key of ["watcher:af-watch-checklist", "watcher:af-watch-improvement", "watcher:watch-github-pr", "watcher:watch-sentry"]) {
       await h.emit("watcher:status", { key, status });
     }
-    assert.equal(h.pipes.at(-1).watchers, "CIRS", status);
+    const detail = { status, ...(status === "waiting" ? { waiting_kind: "other" } : {}) };
+    assert.deepEqual(h.pipes.at(-1).watcher_states, { C: detail, I: detail, R: detail, S: detail });
     assert.equal(h.pipes.at(-1).mode, "base", status);
     for (const key of ["watcher:af-watch-checklist", "watcher:af-watch-improvement", "watcher:watch-github-pr", "watcher:watch-sentry"]) {
       await h.emit("watcher:status", { key, status: "off" });
     }
-    assert.equal(h.pipes.at(-1).watchers, undefined, status);
+    assert.equal(h.pipes.at(-1).watcher_states, undefined, status);
   }
 });
 
@@ -151,7 +140,7 @@ test("watcher activity notices track delegated workers independently of letters 
     await notice(`sentry-${status}`, "started");
     await notice(`checklist-${status}`, status);
     await h.emit("watcher:status", { key: "watcher:af-watch-checklist", status: "off" });
-    assert.equal(h.pipes.at(-1).watchers, "IPRS");
+    assert.deepEqual(h.pipes.at(-1).watcher_states, { I: { status: "polling" }, P: { status: "polling" }, R: { status: "polling" }, S: { status: "polling" } });
     assert.equal(h.pipes.at(-1).mode, "working");
     await notice(`improvement-${status}`, status);
     assert.equal(h.pipes.at(-1).mode, "working");
@@ -160,7 +149,7 @@ test("watcher activity notices track delegated workers independently of letters 
     assert.equal(h.pipes.at(-1).mode, "working");
     await h.emit("agent_settled");
     assert.equal(h.pipes.at(-1).mode, "done");
-    assert.equal(h.pipes.at(-1).watchers, "IPRS");
+    assert.deepEqual(h.pipes.at(-1).watcher_states, { I: { status: "polling" }, P: { status: "polling" }, R: { status: "polling" }, S: { status: "polling" } });
   }
   const count = h.pipes.length;
   for (const entry of [{ type: "message" }, { type: "custom_message", customType: "other" },

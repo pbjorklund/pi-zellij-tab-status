@@ -46,7 +46,6 @@ export function harness(t, options = {}) {
     on: (name, handler) => handlers.set(name, handler),
     events: { on: (name, handler) => handlers.set(name, handler) },
   }, {
-    spinnerIntervalMs: options.spinnerIntervalMs,
     statusReplayIntervalMs: options.statusReplayIntervalMs,
     seenPollFirstDelayMs: options.seenPollFirstDelayMs,
     now: options.now,

@@ -201,7 +201,10 @@ exit "$status"
     def test_watchers_and_delegated_activity_notices_publish_independent_state(self):
         def latest(mode, watchers):
             messages = self.delivered_statuses()
-            return messages and messages[-1].get("mode") == mode and messages[-1].get("watchers", "") == watchers
+            return (messages and messages[-1].get("mode") == mode
+                    and messages[-1].get("watcher_states", {}) == {
+                        letter: {"status": "polling"} for letter in watchers
+                    })
 
         letters = ""
         for key, letter in [("af-watch-checklist", "C"), ("af-watch-improvement", "I"),

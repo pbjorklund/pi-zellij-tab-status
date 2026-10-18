@@ -13,21 +13,6 @@ test("package uses the pi-zellij-tab-status Git source without a slash command",
   assert.doesNotMatch(readme, /pbjorklund\/zellij-pi-tab-status/);
 });
 
-test("stripPiTabPrefix removes working, compacting, and done overlays", () => {
-  assert.equal(status.stripPiTabPrefix("⠋ repo/path:branch"), "repo/path:branch");
-  assert.equal(status.stripPiTabPrefix("◒ repo/path:branch"), "repo/path:branch");
-  assert.equal(status.stripPiTabPrefix("● repo/path:branch"), "repo/path:branch");
-  assert.equal(status.stripPiTabPrefix("repo/path:branch"), "repo/path:branch");
-});
-
-test("status formatters cycle frames and mark unseen completion", () => {
-  assert.equal(status.formatWorkingTabName("repo:main", 0), "⠋ repo:main");
-  assert.equal(status.formatWorkingTabName("repo:main", 1), "⠙ repo:main");
-  assert.equal(status.formatWorkingTabName("repo:main", 10), "⠋ repo:main");
-  assert.equal(status.formatCompactingTabName("repo:main", 0), "◐ repo:main");
-  assert.equal(status.formatDoneTabName("repo:main"), "● repo:main");
-});
-
 test("isInteractiveZellij requires TUI mode and Zellij", (t) => {
   const oldZellij = process.env.ZELLIJ;
   t.after(() => {
