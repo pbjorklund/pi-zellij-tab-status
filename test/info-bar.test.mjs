@@ -1,3 +1,4 @@
+import { createWidgetHost } from "./widget-host.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import extension from "../pi-extension.ts";
@@ -24,7 +25,7 @@ test("unavailable Zellij stays hidden without initializing or probing integratio
 
 test("available bar follows activity without adding Zellij work and ignores late events", async (t) => {
   const widgets = new Map([["utility", ["Utility: on"]]]);
-  const h = harness(t, { ctx: { ui: { setWidget: (key, value) => value === undefined ? widgets.delete(key) : widgets.set(key, value) } } });
+  const h = harness(t, { ctx: { ui: { setWidget: createWidgetHost((key, value) => value === undefined ? widgets.delete(key) : widgets.set(key, value)).setWidget } } });
   await h.emit("session_start");
   assert.equal(widgets.has("pi-zellij-tab-status"), false);
   await h.emit("agent_start");
