@@ -68,10 +68,13 @@ All snapshots, including idle folder metadata, replay every five seconds with th
 Run the deterministic regression suite:
 
 ```bash
+npm ci
 npm test
 npm run test:coverage
 npm run eval
 ```
+
+Use Node.js 22.19 or newer; CI uses Node.js 24. The pinned `pi-tui` development dependency supplies terminal components for Node tests. PI supplies its own SDK packages at runtime; optional peer metadata avoids installing another host SDK for standalone development.
 
 CI enforces at least 95% aggregate line, branch, and function coverage across `pi-extension.ts` and `lib/*.ts`. The eval wrapper runs every test file, records no model output, and makes no network calls. Keep the status protocol synchronized with `zellij-tabbar` when changing message fields or lifecycle semantics.
 
