@@ -93,10 +93,10 @@
       "expected_test": "activity: current subagent jobs keep working after parent settlement"
     },
     {
-      "id": "job-tail-polling-budget",
+      "id": "delegated-work-without-polling",
       "layer": 2,
       "category": "performance",
-      "expected_test": "activity: job polling reads only new entries and stops after completion"
+      "expected_test": "delegated work snapshots retain pending reports across parent settlement without polling"
     },
     {
       "id": "explicit-name-preserved",

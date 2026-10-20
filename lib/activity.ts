@@ -41,15 +41,17 @@ export function createWorkTracker() {
 
 export function createActivityState() {
   const work = createWorkTracker();
+  let delegatedWork = 0;
+  const hasActiveWork = () => work.hasActiveWork() || delegatedWork > 0;
   let compaction: "inactive" | "active" | "work-completed" = "inactive";
 
   function mode(idle: "base" | "done" = "base"): TabMode {
     if (compaction !== "inactive") return "compacting";
-    return work.hasActiveWork() ? "working" : idle;
+    return hasActiveWork() ? "working" : idle;
   }
 
   function completeWork() {
-    if (compaction !== "inactive" && !work.hasActiveWork()) compaction = "work-completed";
+    if (compaction !== "inactive" && !hasActiveWork()) compaction = "work-completed";
     return mode("done");
   }
 
@@ -57,7 +59,11 @@ export function createActivityState() {
     // The controller owns seen/unseen completion. Emit done on transitions,
     // rather than storing a second copy that could outlive the controller's marker.
     mode: () => mode(),
-    hasActiveWork: work.hasActiveWork,
+    hasActiveWork,
+    setDelegatedWork(count: number) {
+      delegatedWork = count;
+      return count > 0 ? mode() : completeWork();
+    },
     startParent() {
       work.startParentAgent();
       return mode();
@@ -85,6 +91,7 @@ export function createActivityState() {
     },
     reset() {
       work.reset();
+      delegatedWork = 0;
       compaction = "inactive";
     },
   };

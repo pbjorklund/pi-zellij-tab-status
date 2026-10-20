@@ -65,7 +65,6 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
     }
     const letters = Object.keys(detail).join("");
     controller.setWatchers(currentCtx, letters, detail);
-    jobs.setWatching(letters.length > 0);
   });
 
   function showActivity(ctx: ExtensionContext, mode: TabMode) {
@@ -75,16 +74,17 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
     controller.setMode(ctx, mode);
   }
 
-  const jobs = createSubagentJobObserver((id, active, ctx) => {
-    showActivity(ctx, active ? activity.startChild(id) : activity.finishChild(id));
+  const jobs = createSubagentJobObserver((count, ctx) => {
+    showActivity(ctx, activity.setDelegatedWork(count));
   });
+  pi.events?.on?.("subagents:work", (snapshot) => jobs.update(snapshot));
 
   pi.on("session_start", (_event, ctx) => {
     startBar(ctx);
+    activity.reset();
     jobs.start(ctx);
     showActivity(ctx, activity.mode());
   });
-  pi.on("tool_execution_end", (event, ctx) => jobs.toolEnd(event, ctx));
   pi.on("agent_start", (_event, ctx) => showActivity(ctx, activity.startParent()));
   // agent_end can precede retries and queued follow-ups. Only settlement
   // ends the parent's working span.

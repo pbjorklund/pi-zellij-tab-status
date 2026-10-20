@@ -2,12 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { flush, harness } from "./helpers/lifecycle.mjs";
 
-const jobResult = (id, status = "started", toolName = "subagent") => ({
-  toolName, isError: false, result: { details: { id, status } },
-});
-const completion = (id, status = "completed") => ({
-  type: "custom_message", customType: "subagent_result", details: { id, status },
-});
+const work = (count) => ({ sessionId: "session-one", count });
 const modes = (h) => h.pipes.flatMap((message) => message.kind === "snapshot" ? [message.mode] : []);
 
 for (const reason of ["threshold", "overflow", "manual"]) {
@@ -40,12 +35,11 @@ for (const terminal of ["session_compact", "session_compact_failed"]) {
 test("activity: current subagent jobs keep working after parent settlement", async (t) => {
   const h = harness(t);
   await h.start();
-  h.fire("tool_execution_end", jobResult("job-one"));
+  h.fire("subagents:work", work(1));
   h.fire("agent_settled");
   await flush();
   assert.equal(modes(h).at(-1), "working");
-  h.appendEntry(completion("job-one"));
-  await h.tick(500);
+  await h.emit("subagents:work", work(0));
   assert.equal(modes(h).at(-1), "done");
 });
 
@@ -55,30 +49,17 @@ test("activity: same-mode subagent events repair a failed working snapshot", asy
   h.failPipes(1);
   await h.emit("agent_start");
 
-  h.fire("tool_execution_end", jobResult("job-one"));
-  h.fire("tool_execution_end", jobResult("job-two"));
+  h.fire("subagents:work", work(1));
+  h.fire("subagents:work", work(2));
   h.fire("agent_settled");
   await flush();
 
   assert.equal(modes(h).at(-1), "working");
-  h.appendEntry(completion("job-one"));
-  await h.tick(500);
+  await h.emit("subagents:work", work(1));
   assert.equal(modes(h).at(-1), "working");
-  h.appendEntry(completion("job-two"));
-  await h.tick(500);
+  await h.emit("subagents:work", work(0));
   assert.equal(modes(h).at(-1), "done");
 });
-
-for (const state of ["completed", "failed", "cancelled"]) {
-  test(`activity: current child ${state} completion publishes done`, async (t) => {
-    const h = harness(t);
-    await h.emit("session_start");
-    await h.emit("tool_execution_end", jobResult("job-one"));
-    h.appendEntry(completion("job-one", state));
-    await h.tick(500);
-    assert.equal(modes(h).at(-1), "done");
-  });
-}
 
 test("activity: malformed and unrelated job events publish no extra status", async (t) => {
   const h = harness(t);
@@ -89,23 +70,6 @@ test("activity: malformed and unrelated job events publish no extra status", asy
     h.fire("subagents:completed", event);
     h.fire("subagents:failed", event);
   }
-  h.fire("tool_execution_end", { ...jobResult("error"), isError: true });
-  h.fire("tool_execution_end", jobResult("unrelated", "started", "bash"));
   await flush();
   assert.equal(h.pipes.length, before);
-});
-
-test("activity: job polling reads only new entries and stops after completion", async (t) => {
-  const h = harness(t);
-  for (let i = 0; i < 100; i++) h.appendEntry({ type: "message" });
-  await h.emit("session_start");
-  await h.emit("tool_execution_end", jobResult("job-one"));
-  h.appendEntry({ type: "message" });
-  h.appendEntry(completion("job-one"));
-  await h.tick(500);
-  assert.equal(h.entryReads(), 2);
-  const reads = h.entryReads();
-  await h.tick(5_000);
-  assert.equal(h.entryReads(), reads);
-  assert.equal(modes(h).at(-1), "done");
 });

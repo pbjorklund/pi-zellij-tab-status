@@ -36,7 +36,7 @@ Update with `pi update git:github.com/pbjorklund/pi-zellij-tab-status`, then rel
 - Never renames tabs. Publishes the PI cwd's folder basename so the sidebar can show folder-only automatic labels, including named PI sessions. Explicit Zellij tab names stay intact. No Git branch inference is used.
 - Coalesces event bursts and treats Zellij commands as best effort, so status failures do not block PI lifecycle hooks.
 
-Subagent tracking consumes `subagent_activity` custom messages from delegated improvement and Sentry workers (payload details: `{ id, status }`, with `started`, `completed`, `failed`, `timed_out`, or `cancelled`). Worker completion removes only that worker's activity; watcher letters remain independent. It also supports the `subagents:started` / `subagents:completed` / `subagents:failed` event bus (payload: `{ id }`) and the `@narumitw/pi-subagents` named-agent tools (`subagent`, `subagent_resume`, and `subagent_kill`). It reads new `subagent_activity` and `subagent_result` entries from in-memory session history every 500 ms while watchers are enabled or tracked agents are active. This catches asynchronous completions while the parent is idle without reading session files or spawning status-frame processes.
+Subagent tracking consumes the maintained `pi-subagents` event `subagents:work` (payload: `{ sessionId, count }`). The count includes running children and reports awaiting a settled continuation. Only snapshots for the current session affect its status; an initial snapshot received before session start is retained for that session. Updates arrive without transcript scanning or polling. Watcher letters remain independent. The `subagents:started` / `subagents:completed` / `subagents:failed` event bus (payload: `{ id }`) remains supported for independent lifecycle producers.
 
 The extension needs PI 0.87.0 or newer and a Zellij version that provides `list-panes`, `list-tabs`, and `pipe`. Status markers require the matching custom sidebar; Zellij's built-in horizontal tab bar keeps its normal name but does not show PI status.
 
@@ -95,7 +95,7 @@ Each test starts a real PI TUI in a separate Zellij session with temporary confi
 - `controller.ts` coalesces lifecycle changes, replays active status for new sidebars, and orders shutdown.
 - `tab-binding.ts` owns binding retries and caching for completion visibility checks.
 - `ownership.ts` parses pane/tab data and selects the owner. `zellij.ts` only reads Zellij state.
-- `activity.ts` owns parent, child, and compaction transitions. `subagent-jobs.ts` adapts named-agent results and reads idle completions.
+- `activity.ts` owns parent, delegated-work, child, and compaction transitions. `subagent-jobs.ts` consumes session-scoped delegated-work snapshots.
 - `status-model.ts` checks interactive Zellij availability. `commands.ts` keeps stdout-reading commands captured, while `status-transport.ts` serializes status pipes with ignored stdio and a 150 ms deadline.
 
 ## License

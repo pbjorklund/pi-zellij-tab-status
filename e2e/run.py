@@ -198,7 +198,7 @@ exit "$status"
         self.assert_static_title()
         self.assertLess(elapsed, 0.25, f"PI shutdown took {elapsed:.3f}s")
 
-    def test_watchers_and_delegated_activity_notices_publish_independent_state(self):
+    def test_watchers_and_delegated_work_snapshots_publish_independent_state(self):
         def latest(mode, watchers):
             messages = self.delivered_statuses()
             return (messages and messages[-1].get("mode") == mode
@@ -228,8 +228,11 @@ exit "$status"
     def test_modern_child_outlives_parent_without_title_animation(self):
         self.send("spawn")
         self.settled()
+        self.wait(lambda: self.delivered_statuses()[-1].get("mode") == "working", "delegated child outlives parent")
         self.assert_static_title()
+        self.action("go-to-tab-name", "control")
         self.send("/fixture modern-complete")
+        self.wait(lambda: self.delivered_statuses()[-1].get("mode") == "done", "delegated child completion")
         self.assert_static_title()
 
     def test_legacy_completion_during_compaction_keeps_static_title(self):

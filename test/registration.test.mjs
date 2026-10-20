@@ -32,7 +32,7 @@ for (const zellij of [undefined, ""]) {
 test("registers lifecycle and event-bus integration inside Zellij", async (t) => {
   const h = harness(t);
   for (const event of ["session_start", "agent_start", "agent_settled", "session_shutdown",
-    "watcher:status", "subagents:started", "subagents:completed", "subagents:failed"]) {
+    "watcher:status", "subagents:work", "subagents:started", "subagents:completed", "subagents:failed"]) {
     assert.equal(h.hasHandler(event), true, event);
   }
   await h.start();

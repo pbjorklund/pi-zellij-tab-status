@@ -39,6 +39,7 @@ export function harness(t, options = {}) {
   let entryReads = 0;
   let abortedCommands = 0;
   const ctx = { cwd: "/repo", mode: "tui", hasUI: true, sessionManager: {
+    getSessionId: () => "session-one",
     getLeafId: () => leaf,
     getEntry: (id) => { entryReads++; return entries.get(id); },
   }, ...options.ctx };

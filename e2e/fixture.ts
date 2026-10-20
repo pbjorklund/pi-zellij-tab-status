@@ -9,6 +9,13 @@ export default function fixture(pi: ExtensionAPI) {
   const directory = process.env.TAB_STATUS_E2E_DIR!;
   const mark = (name: string) => writeFileSync(join(directory, name), "ready");
   const has = (name: string) => existsSync(join(directory, name));
+  let sessionId: string;
+  const workers = new Set<string>();
+  function work(id: string, active: boolean) {
+    if (active) workers.add(id);
+    else workers.delete(id);
+    pi.events.emit("subagents:work", { sessionId, count: workers.size });
+  }
   async function gate(name: string, signal?: AbortSignal) {
     const deadline = Date.now() + 20_000;
     while (!has(name)) {
@@ -75,6 +82,7 @@ export default function fixture(pi: ExtensionAPI) {
     name: "subagent", label: "Fixture child", description: "Return a started child fixture.",
     parameters: Type.Object({}),
     async execute() {
+      work("modern-child", true);
       return { content: [{ type: "text", text: "Child started." }], details: { id: "modern-child", status: "started" } };
     },
   });
@@ -82,24 +90,22 @@ export default function fixture(pi: ExtensionAPI) {
     description: "Drive the isolated tab-status test.",
     async handler(args, ctx) {
       if (args === "legacy-start") pi.events.emit("subagents:started", { id: "legacy-child" });
-      else if (args === "modern-complete") pi.sendMessage({
-        customType: "subagent_result", content: "Child completed.", display: false,
-        details: { id: "modern-child", status: "completed" },
-      }, { triggerTurn: false });
+      else if (args === "modern-complete") work("modern-child", false);
       else if (args.startsWith("watcher ")) {
         const [, key, status] = args.split(" ");
         pi.events.emit("watcher:status", { key: `watcher:${key}`, status });
       } else if (args.startsWith("worker ")) {
         const [, id, status] = args.split(" ");
-        pi.sendMessage({
-          customType: "subagent_activity", content: `Worker ${status}.`, display: false,
-          details: { id, status },
-        }, { triggerTurn: false, deliverAs: "steer" });
+        work(id, status === "started");
       } else if (args === "shutdown") ctx.shutdown();
       else throw new Error(`Unknown fixture command: ${args}`);
     },
   });
-  pi.on("session_start", () => mark("session-started"));
+  pi.on("session_start", (_event, ctx) => {
+    sessionId = ctx.sessionManager.getSessionId();
+    pi.events.emit("subagents:work", { sessionId, count: 0 });
+    mark("session-started");
+  });
   pi.on("agent_settled", () => mark("parent-settled"));
   pi.on("session_before_compact", async (event) => {
     await gate("release-compaction", event.signal);
