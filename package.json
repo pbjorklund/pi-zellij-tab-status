@@ -1,6 +1,6 @@
 {
   "name": "pi-zellij-tab-status",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "type": "module",
   "description": "Publish PI activity and unseen completion to the Zellij vertical sidebar.",
   "exports": {
@@ -8,6 +8,7 @@
     "./pi-extension": "./pi-extension.ts"
   },
   "files": [
+    "CHANGELOG.md",
     "pi-extension.ts",
     "lib"
   ],
