@@ -1,8 +1,9 @@
+import { required } from "./helpers/guards.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { flush, harness } from "./helpers/lifecycle.mjs";
+import { flush, harness } from "./helpers/lifecycle.ts";
 
-const pane = (tabId, tabName, cwd = "/repo") => JSON.stringify([
+const pane = (tabId: number, tabName: string, cwd = "/repo") => JSON.stringify([
   { id: 248, tab_id: tabId, tab_name: tabName, pane_cwd: cwd, pane_command: "pi" },
 ]);
 
@@ -18,7 +19,7 @@ test("binding: startup preserves an explicit name through work, settlement, and 
   assert.equal(h.calls.some(({ command }) => command === "git"), false);
   assert.deepEqual(h.pipes.filter(({ kind }) => kind === "snapshot").map(({ mode }) => mode),
     ["base", "working", "working", "done"]);
-  assert.equal(h.pipes.at(-1).kind, "remove");
+  assert.equal(required(h.pipes.at(-1)).kind, "remove");
 });
 
 test("binding: a transient discovery miss retains a known existing tab", async (t) => {
@@ -41,7 +42,7 @@ test("binding: discovery retries without writing a title", async (t) => {
   assert.equal(h.calls.filter(({ args }) => args[1] === "list-panes").length, 2);
   assert.deepEqual(h.writes, []);
   await h.emit("agent_start");
-  assert.equal(h.pipes.at(-1).mode, "working");
+  assert.equal(required(h.pipes.at(-1)).mode, "working");
 });
 
 test("binding: shutdown aborts pane lookup without renaming a tab", async (t) => {
@@ -67,10 +68,10 @@ test("binding: moved panes clear completion only on their new tab", async (t) =>
     { tab_id: 27, name: "New explicit name", active: false },
   ]));
   await h.tick(5);
-  assert.equal(h.pipes.at(-1).mode, "done");
+  assert.equal(required(h.pipes.at(-1)).mode, "done");
   h.setTabOutput(JSON.stringify([{ tab_id: 27, name: "New explicit name", active: true }]));
   await h.tick(10);
-  assert.equal(h.pipes.at(-1).mode, "base");
+  assert.equal(required(h.pipes.at(-1)).mode, "base");
   assert.deepEqual(h.writes, []);
 });
 

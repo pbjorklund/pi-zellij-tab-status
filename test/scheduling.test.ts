@@ -1,8 +1,9 @@
+import { required } from "./helpers/guards.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { flush, harness } from "./helpers/lifecycle.mjs";
+import { flush, harness } from "./helpers/lifecycle.ts";
 
-const modes = (h) => h.pipes.flatMap((message) => message.kind === "snapshot" ? [message.mode] : []);
+const modes = (h: ReturnType<typeof harness>) => h.pipes.flatMap((message) => message.kind === "snapshot" ? [message.mode] : []);
 
 test("scheduling: lifecycle hooks do not wait for stalled Zellij", async (t) => {
   const h = harness(t);
@@ -56,7 +57,7 @@ test("scheduling: pane discovery cannot delay active status replay", async (t) =
   const held = h.hold((_command, args) => args[1] === "list-panes");
   h.fire("agent_start");
   await held.entered.promise;
-  const working = h.pipes.at(-1);
+  const working = required(h.pipes.at(-1));
 
   await h.tick(5);
 
@@ -69,7 +70,7 @@ test("scheduling: replay follows the latest semantic state", async (t) => {
   const h = harness(t, { statusReplayIntervalMs: 5 });
   await h.start();
   await h.emit("session_before_compact");
-  const compacting = h.pipes.at(-1);
+  const compacting = required(h.pipes.at(-1));
 
   await h.tick(5);
 
@@ -79,7 +80,7 @@ test("scheduling: replay follows the latest semantic state", async (t) => {
 test("scheduling: a failed replay retries the same snapshot", async (t) => {
   const h = harness(t, { statusReplayIntervalMs: 5 });
   await h.start();
-  const working = h.pipes.at(-1);
+  const working = required(h.pipes.at(-1));
   h.failPipes(1);
 
   await h.tick(5);
@@ -95,7 +96,7 @@ test("scheduling: same-mode repair replaces a failed snapshot replay", async (t)
   h.failPipes(1);
   await h.emit("agent_start");
   await h.emit("subagents:started", { id: "child" });
-  const repaired = h.pipes.at(-1);
+  const repaired = required(h.pipes.at(-1));
 
   await h.tick(5);
   await h.tick(5);
@@ -200,7 +201,8 @@ test("scheduling: invalid pane identity publishes nothing", async (t) => {
   assert.deepEqual(h.pipes, []);
 });
 
-for (const mode of ["rpc", "json", "print"]) {
+const headlessModes: ("rpc" | "json" | "print")[] = ["rpc", "json", "print"];
+for (const mode of headlessModes) {
   test(`scheduling: ${mode} lifecycle spawns nothing`, async (t) => {
     const h = harness(t, { ctx: { mode } });
     await h.start();

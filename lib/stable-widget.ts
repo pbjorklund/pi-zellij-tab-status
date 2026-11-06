@@ -3,24 +3,22 @@ import { Container, Text } from "@earendil-works/pi-tui";
 
 export type WidgetUI = Pick<ExtensionContext["ui"], "setWidget">;
 type Factory = Exclude<Parameters<WidgetUI["setWidget"]>[1], undefined>;
-type Content = string[] | Factory | undefined;
+type Content = string[] | Factory;
 type Options = Parameters<WidgetUI["setWidget"]>[2];
 
 // Pi removes and reinserts widget keys on setWidget; refresh the mounted view instead.
 export function createStableWidget() {
-	type Mounted = Map<
-		string,
-		{
-			content: Exclude<Content, undefined>;
-			placement: Options;
-			update(content: Exclude<Content, undefined>): void;
-		}
-	>;
+	type Entry = {
+		content: Content;
+		placement: Options;
+		update(content: Content): void;
+	};
+	type Mounted = Map<string, Entry>;
 	// PI's bound setWidget capability survives fresh turn contexts and UI prompt wrappers.
 	const owners = new WeakMap<WidgetUI["setWidget"], Mounted>();
-	return (ui: WidgetUI | undefined, key: string, content: Content, options?: Options): void => {
+	return (ui: WidgetUI | undefined, key: string, content: Content | undefined, options?: Options): void => {
 		if (!ui?.setWidget) return;
-		const mounted: Mounted = owners.get(ui.setWidget) ?? new Map();
+		const mounted: Mounted = owners.get(ui.setWidget) ?? new Map<string, Entry>();
 		owners.set(ui.setWidget, mounted);
 		const previous = mounted.get(key);
 		if (content === undefined) {
@@ -43,12 +41,12 @@ export function createStableWidget() {
 		const entry = {
 			content: Array.isArray(content) ? [...content] : content,
 			placement: options,
-			update: (_content: Exclude<Content, undefined>) => {},
+			update: (_content: Content) => {},
 		};
 		ui.setWidget(
 			key,
 			(tui, theme) => {
-				const build = (value: Exclude<Content, undefined>) => {
+				const build = (value: Content) => {
 					if (!Array.isArray(value)) return value(tui, theme);
 					// Match Pi's string-array padding, wrapping and ten-line cap.
 					const container = new Container();

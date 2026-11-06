@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { StatusContext } from "./host.ts";
 import type { TabMode } from "./activity.ts";
 
 export type { TabMode } from "./activity.ts";
@@ -33,7 +33,7 @@ export type WatcherDetail = {
   waiting_kind?: "human" | "other";
 };
 export type WatcherStates = Record<string, WatcherDetail>;
-type Target = { ctx: ExtensionContext; mode: TabMode; watchers: string; watcherStates: WatcherStates; folder: string };
+type Target = { ctx: StatusContext; mode: TabMode; watchers: string; watcherStates: WatcherStates; folder: string };
 type StatusSnapshot = {
   v: 1;
   kind: "snapshot";
@@ -176,7 +176,7 @@ export function createTabStatusController(options: ZellijTabStatusOptions = {}) 
     seenTimer.unref?.();
   }
 
-  function setMode(ctx: ExtensionContext, mode: TabMode) {
+  function setMode(ctx: StatusContext, mode: TabMode) {
     if (closing || !isInteractiveZellij(ctx)) return;
     const folder = basename(ctx.cwd) || "/";
     if (target?.mode === mode && target.watchers === watchers && target.ctx.cwd === ctx.cwd && target.folder === folder &&
@@ -197,13 +197,13 @@ export function createTabStatusController(options: ZellijTabStatusOptions = {}) 
 
   return {
     setMode,
-    setWatchers(ctx: ExtensionContext | null, value: string, detail: WatcherStates = {}) {
+    setWatchers(ctx: StatusContext | null, value: string, detail: WatcherStates = {}) {
       if (closing || (watchers === value && JSON.stringify(watcherStates) === JSON.stringify(detail))) return;
       watchers = value;
       watcherStates = detail;
       if (ctx && target) setMode(ctx, target.mode);
     },
-    clearDone(ctx: ExtensionContext) {
+    clearDone(ctx: StatusContext) {
       if (target?.mode === "done") setMode(ctx, "base");
     },
     close(): Promise<void> {

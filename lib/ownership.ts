@@ -4,7 +4,9 @@ export type ZellijTabInfo = {
   active: boolean;
 };
 
-type JsonRecord = Record<string, unknown>;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
 
 type ZellijPaneInfo = {
   paneId: string;
@@ -20,9 +22,9 @@ type ZellijPaneInfo = {
 };
 
 export function parseTabInfo(value: unknown): ZellijTabInfo | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (!isRecord(value)) return null;
 
-  const record = value as JsonRecord;
+  const record = value;
   const tabId = record.tab_id;
   const name = record.name;
 
@@ -38,15 +40,15 @@ export function parseTabInfo(value: unknown): ZellijTabInfo | null {
 }
 
 export function parseTabList(stdout: string): ZellijTabInfo[] {
-  const parsed = JSON.parse(stdout) as unknown;
+  const parsed: unknown = JSON.parse(stdout);
   if (!Array.isArray(parsed)) return [];
   return parsed.map(parseTabInfo).filter((tab): tab is ZellijTabInfo => tab !== null);
 }
 
 export function parsePaneInfo(value: unknown): ZellijPaneInfo | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (!isRecord(value)) return null;
 
-  const record = value as JsonRecord;
+  const record = value;
   const paneId = record.id;
   const tabId = record.tab_id;
   const tabName = record.tab_name;
@@ -74,7 +76,7 @@ export function parsePaneInfo(value: unknown): ZellijPaneInfo | null {
 }
 
 export function parsePaneList(stdout: string): ZellijPaneInfo[] {
-  const parsed = JSON.parse(stdout) as unknown;
+  const parsed: unknown = JSON.parse(stdout);
   if (!Array.isArray(parsed)) return [];
   return parsed.map(parsePaneInfo).filter((pane): pane is ZellijPaneInfo => pane !== null);
 }

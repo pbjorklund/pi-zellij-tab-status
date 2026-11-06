@@ -1,12 +1,12 @@
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { StatusContext } from "./host.ts";
 import { isInteractiveZellij } from "./status-model.ts";
 
 type WorkSnapshot = { sessionId: string; count: number };
 
 export function createSubagentJobObserver(
-  onChange: (count: number, ctx: ExtensionContext) => void,
+  onChange: (count: number, ctx: StatusContext) => void,
 ) {
-  let ctx: ExtensionContext | null = null;
+  let ctx: StatusContext | null = null;
   let latest: WorkSnapshot | undefined;
   let count = 0;
   let closed = false;
@@ -18,14 +18,15 @@ export function createSubagentJobObserver(
   }
 
   return {
-    start(context: ExtensionContext) {
+    start(context: StatusContext) {
       ctx = context;
       count = 0;
       apply();
     },
     update(value: unknown) {
       if (closed || !value || typeof value !== "object" || Array.isArray(value)) return;
-      const snapshot = value as { sessionId?: unknown; count?: unknown };
+      if (!("sessionId" in value) || !("count" in value)) return;
+      const snapshot = value;
       if (typeof snapshot.sessionId !== "string" || !snapshot.sessionId.trim() ||
         typeof snapshot.count !== "number" || !Number.isSafeInteger(snapshot.count) || snapshot.count < 0) return;
       if (ctx && snapshot.sessionId !== ctx.sessionManager.getSessionId()) return;

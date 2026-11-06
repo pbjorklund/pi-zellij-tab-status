@@ -1,16 +1,24 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import type { TestContext } from "node:test";
+import type { SpawnOptions } from "node:child_process";
+import type { StatusContext, StatusHandler } from "../../lib/host.ts";
+import type { ZellijTabStatusOptions } from "../../pi-extension.ts";
+import { statusMessage, required, type StatusMessage } from "./guards.ts";
 import extension from "../../pi-extension.ts";
 
-export const flush = () => new Promise((resolve) => setImmediate(resolve));
+export const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 function deferred() {
-  let resolve;
-  const promise = new Promise((done) => { resolve = done; });
+  let resolve: () => void = () => { throw new Error("deferred not initialized"); };
+  const promise = new Promise<void>((done) => { resolve = done; });
   return { promise, resolve };
 }
 
-export function harness(t, options = {}) {
+type Match = (command: string, args: string[]) => boolean;
+type Gate = { matches: Match; entered: ReturnType<typeof deferred>; release: ReturnType<typeof deferred> };
+type Options = ZellijTabStatusOptions & { ctx?: Partial<StatusContext> };
+export function harness(t: TestContext, options: Options = {}) {
   const oldEnv = { ZELLIJ: process.env.ZELLIJ, ZELLIJ_PANE_ID: process.env.ZELLIJ_PANE_ID };
   process.env.ZELLIJ = "0";
   process.env.ZELLIJ_PANE_ID = "248";
@@ -21,28 +29,29 @@ export function harness(t, options = {}) {
     }
   });
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"], now: 0 });
-  const handlers = new Map();
-  const calls = [];
-  const writes = [];
-  const pipes = [];
+  const handlers = new Map<string, StatusHandler>();
+  const calls: { command: string; args: string[]; options: SpawnOptions; at: number }[] = [];
+  const writes: { tabId: string; name: string }[] = [];
+  const pipes: StatusMessage[] = [];
   let tabId = 26;
   let branch = "main";
   let active = false;
-  let paneOutput;
-  let tabOutput;
+  let paneOutput: string | undefined;
+  let tabOutput: string | undefined;
   let renameFailures = 0;
   let pipeFailures = 0;
-  let gate;
-  const heldCommands = [];
-  const entries = new Map();
-  let leaf = null;
+  let gate: Gate | undefined;
+  const heldCommands: Gate[] = [];
+  const entries = new Map<string, Record<string, unknown>>();
+  let leaf: string | null = null;
   let entryReads = 0;
   let abortedCommands = 0;
-  const ctx = { cwd: "/repo", mode: "tui", hasUI: true, sessionManager: {
+  const sessionManager = {
     getSessionId: () => "session-one",
     getLeafId: () => leaf,
-    getEntry: (id) => { entryReads++; return entries.get(id); },
-  }, ...options.ctx };
+    getEntry: (id: string) => { entryReads++; return entries.get(id); },
+  };
+  const ctx: StatusContext = { cwd: "/repo", mode: "tui", hasUI: true, sessionManager, ...options.ctx };
   extension({
     on: (name, handler) => handlers.set(name, handler),
     events: { on: (name, handler) => handlers.set(name, handler) },
@@ -52,9 +61,7 @@ export function harness(t, options = {}) {
     now: options.now,
     runtimeId: options.runtimeId,
     spawnIgnored: (command, args, execOptions) => {
-      const child = new EventEmitter();
-      child.unref = () => {};
-      child.kill = () => {};
+      const child = Object.assign(new EventEmitter(), { unref() {}, kill() { return true; } });
       calls.push({ command, args, options: execOptions, at: Date.now() });
       queueMicrotask(async () => {
         if (gate?.matches(command, args)) {
@@ -68,7 +75,7 @@ export function harness(t, options = {}) {
           child.emit("error", new Error("pipe failed"));
           return;
         }
-        pipes.push(JSON.parse(args.at(-1)));
+        pipes.push(statusMessage(required(args.at(-1))));
         child.emit("close", 0, null);
       });
       return child;
@@ -116,7 +123,7 @@ export function harness(t, options = {}) {
       return { stdout: "" };
     },
   });
-  const fire = (name, event = {}) => {
+  const fire = (name: string, event: unknown = {}) => {
     const handler = handlers.get(name);
     assert.ok(handler, `missing handler for ${name}`);
     return handler(event, ctx);
@@ -127,25 +134,25 @@ export function harness(t, options = {}) {
   });
   return {
     fire, calls, writes, pipes,
-    hasHandler: (name) => handlers.has(name),
-    async emit(name, event) { await fire(name, event); await flush(); },
+    hasHandler: (name: string) => handlers.has(name),
+    async emit(name: string, event: unknown = {}) { await fire(name, event); await flush(); },
     entryReads: () => entryReads,
     abortedCommands: () => abortedCommands,
-    appendEntry(entry) {
+    appendEntry(entry: Record<string, unknown>) {
       const id = `entry-${entries.size}`;
       entries.set(id, { ...entry, id, parentId: leaf });
       leaf = id;
     },
     async start() { fire("session_start"); await flush(); fire("agent_start"); await flush(); },
-    async tick(ms) { t.mock.timers.tick(ms); await flush(); },
-    setActive(value) { active = value; },
-    setBranch(value) { branch = value; },
-    moveTo(value) { tabId = value; },
-    setPaneOutput(value) { paneOutput = value; },
-    setTabOutput(value) { tabOutput = value; },
-    failRenames(count) { renameFailures = count; },
-    failPipes(count) { pipeFailures = count; },
-    hold(matches) {
+    async tick(ms: number) { t.mock.timers.tick(ms); await flush(); },
+    setActive(value: boolean) { active = value; },
+    setBranch(value: string) { branch = value; },
+    moveTo(value: number) { tabId = value; },
+    setPaneOutput(value: string) { paneOutput = value; },
+    setTabOutput(value: string) { tabOutput = value; },
+    failRenames(count: number) { renameFailures = count; },
+    failPipes(count: number) { pipeFailures = count; },
+    hold(matches: Match) {
       const held = { matches, entered: deferred(), release: deferred() };
       gate = held;
       heldCommands.push(held);

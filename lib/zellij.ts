@@ -1,4 +1,4 @@
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { StatusContext } from "./host.ts";
 import { runCommand, type ExecFileAsyncFn } from "./commands.ts";
 import { parsePaneList, parseTabList, selectOwningPane, type ZellijTabInfo } from "./ownership.ts";
 
@@ -6,7 +6,7 @@ export type OwningTabInfo = ZellijTabInfo & { paneCwd: string | null };
 
 export async function readOwningTabWith(
   exec: ExecFileAsyncFn,
-  ctx: Pick<ExtensionContext, "cwd">,
+  ctx: Pick<StatusContext, "cwd">,
 ): Promise<OwningTabInfo | null> {
   try {
     const [{ stdout: panesStdout }, tabsResult] = await Promise.all([

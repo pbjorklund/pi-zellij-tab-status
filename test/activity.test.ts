@@ -1,16 +1,17 @@
+import { required } from "./helpers/guards.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { flush, harness } from "./helpers/lifecycle.mjs";
+import { flush, harness } from "./helpers/lifecycle.ts";
 
-const work = (count) => ({ sessionId: "session-one", count });
-const modes = (h) => h.pipes.flatMap((message) => message.kind === "snapshot" ? [message.mode] : []);
+const work = (count: number) => ({ sessionId: "session-one", count });
+const modes = (h: ReturnType<typeof harness>) => h.pipes.flatMap((message) => message.kind === "snapshot" ? [message.mode] : []);
 
 for (const reason of ["threshold", "overflow", "manual"]) {
   test(`activity: ${reason} compaction replays status without title frame traffic`, async (t) => {
     const h = harness(t);
     await h.emit("session_start");
     await h.emit("session_before_compact", { reason, willRetry: false });
-    const compacting = h.pipes.at(-1);
+    const compacting = required(h.pipes.at(-1));
     const writes = h.writes.length;
     await h.tick(5_000);
     assert.deepEqual(h.pipes.slice(-2), [compacting, compacting]);

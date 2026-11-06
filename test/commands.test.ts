@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { runIgnoredCommand } from "../lib/commands.ts";
 
+class TestChild extends EventEmitter {
+  unrefCalled = false;
+  killSignal: NodeJS.Signals | number | undefined;
+  unref() { this.unrefCalled = true; }
+  kill(signal?: NodeJS.Signals | number) { this.killSignal = signal; return true; }
+}
 function childProcess() {
-  const child = new EventEmitter();
-  child.unrefCalled = false;
-  child.killSignal = null;
-  child.unref = () => { child.unrefCalled = true; };
-  child.kill = (signal) => { child.killSignal = signal; };
-  return child;
+  return new TestChild();
 }
 
 test("commands: ignored transport resolves without captured streams", async () => {

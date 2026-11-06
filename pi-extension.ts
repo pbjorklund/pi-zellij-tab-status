@@ -1,5 +1,5 @@
 import { createStableWidget } from "./lib/stable-widget.ts";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { widgetUI, type StatusHost, type StatusContext } from "./lib/host.ts";
 import { createTabStatusController, type ZellijTabStatusOptions, type WatcherDetail, type WatcherStates } from "./lib/controller.ts";
 import { createActivityState, parseSubagentId, type TabMode } from "./lib/activity.ts";
 import { createSubagentJobObserver } from "./lib/subagent-jobs.ts";
@@ -11,29 +11,29 @@ export { parseTabInfo, parseTabList, parsePaneInfo, parsePaneList, selectOwningP
 export { isInteractiveZellij } from "./lib/status-model.ts";
 export { parseSubagentId, createWorkTracker } from "./lib/activity.ts";
 
-const WATCHERS = [
+const WATCHERS: readonly (readonly [string, string])[] = [
   ["C", "watcher:af-watch-checklist"],
   ["I", "watcher:af-watch-improvement"],
   ["P", "watcher:af-watch-project-task"],
   ["R", "watcher:watch-github-pr"],
   ["S", "watcher:watch-sentry"],
-] as const;
+];
 
-export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabStatusOptions = {}) {
+export default function zellijPiTabStatus(pi: StatusHost, options: ZellijTabStatusOptions = {}) {
   const setWidget = createStableWidget();
-  let barCtx: ExtensionContext | undefined;
-  const widget = (ctx: ExtensionContext, mode?: TabMode) => {
+  let barCtx: StatusContext | undefined;
+  const widget = (ctx: StatusContext, mode?: TabMode) => {
     if (ctx.mode !== "tui" || !ctx.hasUI) return;
     const pane = Number(process.env.ZELLIJ_PANE_ID);
     const visible = process.env.ZELLIJ && process.env.ZELLIJ_PANE_ID?.trim() && Number.isSafeInteger(pane) && pane >= 0
       && (mode === "working" || mode === "compacting");
-    setWidget(ctx.ui, "pi-zellij-tab-status", visible ? [`Zellij: ${mode}`] : undefined);
+    setWidget(widgetUI(ctx.ui), "pi-zellij-tab-status", visible ? [`Zellij: ${mode}`] : undefined);
   };
   const clearBar = () => {
-    if (barCtx?.mode === "tui" && barCtx.hasUI) setWidget(barCtx.ui, "pi-zellij-tab-status", undefined);
+    if (barCtx?.mode === "tui" && barCtx.hasUI) setWidget(widgetUI(barCtx.ui), "pi-zellij-tab-status", undefined);
     barCtx = undefined;
   };
-  const startBar = (ctx: ExtensionContext) => {
+  const startBar = (ctx: StatusContext) => {
     clearBar();
     barCtx = ctx;
     widget(ctx, "base");
@@ -46,19 +46,21 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
 
   const controller = createTabStatusController(options);
   const activity = createActivityState();
-  let currentCtx: ExtensionContext | null = null;
+  let currentCtx: StatusContext | null = null;
   let closed = false;
   const watcherStatuses = new Map<string, WatcherDetail>();
 
   pi.events?.on?.("watcher:status", (data: unknown) => {
     if (closed || !data || typeof data !== "object") return;
-    const { key, status, waitingKind } = data as { key?: unknown; status?: unknown; waitingKind?: unknown };
-    if (!WATCHERS.some(([, canonical]) => canonical === key) || typeof status !== "string" ||
-      !["off", "polling", "queued", "working", "waiting", "paused", "error"].includes(status)) return;
-    watcherStatuses.set(key as string, {
-      status: status as WatcherDetail["status"],
-      ...(status === "waiting" ? { waiting_kind: waitingKind === "human" ? "human" : "other" } as const : {}),
-    });
+    if (!("key" in data) || !("status" in data)) return;
+    const { key, status } = data;
+    const waitingKind = "waitingKind" in data ? data.waitingKind : undefined;
+    if (typeof key !== "string" || !WATCHERS.some(([, canonical]) => canonical === key) ||
+      (status !== "off" && status !== "polling" && status !== "queued" && status !== "working" &&
+        status !== "waiting" && status !== "paused" && status !== "error")) return;
+    const detailValue: WatcherDetail = { status };
+    if (status === "waiting") detailValue.waiting_kind = waitingKind === "human" ? "human" : "other";
+    watcherStatuses.set(key, detailValue);
     const detail: WatcherStates = {};
     for (const [letter, canonical] of WATCHERS) {
       const value = watcherStatuses.get(canonical);
@@ -68,7 +70,7 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
     controller.setWatchers(currentCtx, letters, detail);
   });
 
-  function showActivity(ctx: ExtensionContext, mode: TabMode) {
+  function showActivity(ctx: StatusContext, mode: TabMode) {
     if (closed) return;
     widget(ctx, mode);
     currentCtx = ctx;
@@ -104,7 +106,7 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
     showActivity(ctx, activity.settleParent());
   });
   pi.on("session_before_compact", (_event, ctx) => showActivity(ctx, activity.startCompaction()));
-  const finishCompacting = (_event: unknown, ctx: ExtensionContext) => showActivity(ctx, activity.finishCompaction());
+  const finishCompacting = (_event: unknown, ctx: StatusContext) => showActivity(ctx, activity.finishCompaction());
   pi.on("session_compact", finishCompacting);
   pi.on("session_compact_failed", finishCompacting);
 
@@ -128,7 +130,8 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
 
   pi.on("input", (event, ctx) => {
     currentCtx = ctx;
-    if (event.source !== "extension" && !activity.hasActiveWork()) controller.clearDone(ctx);
+    if (!(event && typeof event === "object" && "source" in event && event.source === "extension") &&
+      !activity.hasActiveWork()) controller.clearDone(ctx);
   });
   pi.on("session_shutdown", () => {
     clearBar();

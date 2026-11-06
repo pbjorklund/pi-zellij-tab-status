@@ -79,14 +79,16 @@ Run the deterministic regression suite:
 
 ```bash
 npm ci
-npm test
+npm run check
 npm run test:coverage
 npm run eval
 ```
 
-Use Node.js 22.19 or newer; CI uses Node.js 24. The pinned `pi-tui` development dependency supplies terminal components for Node tests. PI supplies its own SDK packages at runtime; optional peer metadata avoids installing another host SDK for standalone development.
+Use Node.js 22.19 or newer; CI uses Node.js 24. Pinned local development dependencies supply TypeScript, ESLint, the test loader, terminal components, and the fixture SDK. PI supplies its own SDK packages at runtime; optional peer metadata keeps the host SDK optional for package consumers.
 
-CI enforces at least 95% aggregate line, branch, and function coverage across `pi-extension.ts` and `lib/*.ts`. The eval wrapper runs every test file, records no model output, and makes no network calls. Keep the status protocol synchronized with `zellij-tabbar` when changing message fields or lifecycle semantics.
+`npm run check` runs the non-emitting strict typecheck, type-aware lint with zero warnings, negative tooling probes, and all TypeScript unit tests. `npm run typecheck`, `npm run lint`, and `npm run test:tooling` also run separately. Every maintained TypeScript file, including tests, fixtures, and tooling, is checked. External values enter as `unknown`; explicit/implicit `any`, unsafe operations, unchecked assertions, and suppression comments fail validation. Python E2E and eval runners stay native Python.
+
+CI runs the same checks and enforces at least 95% aggregate line, branch, and function coverage across `pi-extension.ts` and `lib/*.ts`. The eval wrapper runs every test file, records no model output, and makes no network calls. Keep the status protocol synchronized with `zellij-tabbar` when changing message fields or lifecycle semantics.
 
 ### Live smoke and E2E tests
 

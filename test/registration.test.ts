@@ -1,7 +1,8 @@
+import { required } from "./helpers/guards.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import extension from "../pi-extension.ts";
-import { harness } from "./helpers/lifecycle.mjs";
+import { harness } from "./helpers/lifecycle.ts";
 
 for (const zellij of [undefined, ""]) {
   test(`registers only passive bar lifecycle outside Zellij (${zellij === undefined ? "unset" : "empty"})`, (t) => {
@@ -15,7 +16,7 @@ for (const zellij of [undefined, ""]) {
     if (zellij === undefined) delete process.env.ZELLIJ;
     else process.env.ZELLIJ = zellij;
     process.env.ZELLIJ_PANE_ID = "248";
-    const registrations = [];
+    const registrations: string[] = [];
     const options = new Proxy({}, {
       get() { assert.fail("inactive extension must not initialize the controller"); },
     });
@@ -36,7 +37,7 @@ test("registers lifecycle and event-bus integration inside Zellij", async (t) =>
     assert.equal(h.hasHandler(event), true, event);
   }
   await h.start();
-  assert.equal(h.pipes.at(-1).mode, "working");
+  assert.equal(required(h.pipes.at(-1)).mode, "working");
   await h.emit("agent_settled");
-  assert.equal(h.pipes.at(-1).mode, "done");
+  assert.equal(required(h.pipes.at(-1)).mode, "done");
 });

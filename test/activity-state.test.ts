@@ -1,8 +1,11 @@
 import test from "node:test";
+import { required } from "./helpers/guards.ts";
 import assert from "node:assert/strict";
 import { createActivityState } from "../lib/activity.ts";
 
-const cases = [
+type Activity = ReturnType<typeof createActivityState>;
+type Action = "mode" | "startCompaction" | "finishCompaction" | "startParent" | "settleParent" | "startChild" | "finishChild";
+const cases: [string, [Action, ReturnType<Activity["mode"]>, string?][]][] = [
   ["idle compaction returns to base", [
     ["mode", "base"], ["startCompaction", "compacting"], ["mode", "compacting"],
     ["finishCompaction", "base"],
@@ -41,7 +44,7 @@ for (const [name, steps] of cases) {
   test(`activity state: ${name}`, () => {
     const activity = createActivityState();
     for (const [action, expected, id] of steps) {
-      assert.equal(activity[action](id), expected, action);
+      assert.equal((action === "startChild" || action === "finishChild" ? activity[action](required(id)) : activity[action]()), expected, action);
     }
   });
 }

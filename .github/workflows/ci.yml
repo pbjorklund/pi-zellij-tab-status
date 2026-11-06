@@ -21,6 +21,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: npm ci
+      - run: npm run check
       - run: npm run test:coverage
       - run: npm run eval
 
@@ -36,9 +37,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install PI and Zellij
+      - run: npm ci
+      - name: Use the pinned fixture host
+        run: echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Install Zellij
         run: |
-          npm install --global @earendil-works/pi-coding-agent@0.85.1
           curl --fail --location --retry 3 --output "$RUNNER_TEMP/zellij.tar.gz" \
             https://github.com/zellij-org/zellij/releases/download/v0.45.0/zellij-x86_64-unknown-linux-musl.tar.gz
           echo "ab8b2494d80c20c07da4361041a25b96b93c73df992d2d54143e70fb9b1a1063  $RUNNER_TEMP/zellij.tar.gz" | sha256sum --check

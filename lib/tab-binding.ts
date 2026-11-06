@@ -1,4 +1,4 @@
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { StatusContext } from "./host.ts";
 import type { ExecFileAsyncFn } from "./commands.ts";
 import { pathsMatch } from "./ownership.ts";
 import { readOwningTabWith, readTabByIdWith } from "./zellij.ts";
@@ -19,7 +19,7 @@ export function createTabBinding(
 ) {
   let binding: TabBinding | null = null;
 
-  async function ensure(ctx: ExtensionContext, valid: () => boolean) {
+  async function ensure(ctx: StatusContext, valid: () => boolean) {
     if (binding && pathsMatch(binding.cwd, ctx.cwd) && now() - binding.validatedAt < VALIDATION_TTL_MS) return binding;
 
     for (let attempt = 0; attempt < BIND_RETRY_ATTEMPTS && valid(); attempt++) {

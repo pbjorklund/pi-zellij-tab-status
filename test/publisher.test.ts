@@ -1,6 +1,7 @@
+import { required } from "./helpers/guards.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { flush, harness } from "./helpers/lifecycle.mjs";
+import { flush, harness } from "./helpers/lifecycle.ts";
 
 test("publisher: lifecycle transitions use snapshots instead of animated tab renames", async (t) => {
   const h = harness(t, { runtimeId: "run-1" });
@@ -30,7 +31,7 @@ test("publisher: duplicate modes are coalesced and shutdown removes only its run
   assert.equal(h.pipes.filter(({ mode }) => mode === "working").length, 1);
 
   await h.fire("session_shutdown");
-  assert.deepEqual(h.pipes.at(-1), {
+  assert.deepEqual(required(h.pipes.at(-1)), {
     v: 1, kind: "remove", runtime_id: "run-2", seq: 3, pane_id: 248,
   });
 });

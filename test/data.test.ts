@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import * as status from "../pi-extension.ts";
 import { readOwningTabWith, readTabByIdWith } from "../lib/zellij.ts";
-import { runCommand } from "../lib/commands.ts";
+import { runCommand, type ExecFileAsyncFn } from "../lib/commands.ts";
 
-const pane = (values = {}) => ({
+type Pane = NonNullable<ReturnType<typeof status.parsePaneInfo>>;
+const pane = (values: Partial<Pane> = {}): Pane => ({
   paneId: "1", tabId: "10", tabName: "repo", paneCwd: "/repo",
   paneCommand: null, terminalCommand: null, title: null,
   focused: false, plugin: false, tabPosition: 0, ...values,
@@ -97,7 +98,7 @@ test("ownership reads: malformed output and command failures remain best effort"
 });
 
 test("ownership reads: pane metadata still binds when tab listing fails", async () => {
-  const exec = async (_command, args) => {
+  const exec: ExecFileAsyncFn = async (_command, args) => {
     if (args[1] === "list-tabs") throw new Error("unavailable");
     return { stdout: JSON.stringify([{ id: 1, tab_id: 10, tab_name: "repo", pane_cwd: "/repo" }]) };
   };

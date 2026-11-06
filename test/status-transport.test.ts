@@ -1,20 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import type { SpawnOptions } from "node:child_process";
 import { createStatusTransport } from "../lib/status-transport.ts";
 
-const flush = () => new Promise((resolve) => setImmediate(resolve));
+const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 function controlledSpawner() {
-  const children = [];
-  const calls = [];
+  const children: EventEmitter[] = [];
+  const calls: { command: string; args: string[]; options: SpawnOptions }[] = [];
   return {
     children,
     calls,
-    spawn(command, args, options) {
-      const child = new EventEmitter();
-      child.unref = () => {};
-      child.kill = () => {};
+    spawn(command: string, args: string[], options: SpawnOptions) {
+      const child = Object.assign(new EventEmitter(), { unref() {}, kill() { return true; } });
       children.push(child);
       calls.push({ command, args, options });
       return child;

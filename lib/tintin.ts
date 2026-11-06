@@ -1,7 +1,12 @@
 // Tintin's registry is process-global, but child sessions have their own event buses.
 // Adopt it only when it can resolve an id observed on this session's bus.
-type Manager = { getRecord(id: string): unknown; hasRunning(): boolean };
+type Manager = { getRecord(id: string): unknown; hasRunning(): unknown };
 const key = Symbol.for("pi-subagents:manager");
+function isManager(value: unknown): value is Manager {
+  return value !== null && typeof value === "object" &&
+    "getRecord" in value && typeof value.getRecord === "function" &&
+    "hasRunning" in value && typeof value.hasRunning === "function";
+}
 
 export function createTintinObserver(onChange: (working: boolean) => void) {
   let manager: Manager | undefined;
@@ -55,13 +60,11 @@ export function createTintinObserver(onChange: (working: boolean) => void) {
     observe(id: string) {
       try {
         const candidate: unknown = Reflect.get(globalThis, key);
-        if (!candidate || typeof candidate !== "object" ||
-          !("getRecord" in candidate) || typeof candidate.getRecord !== "function" ||
-          !("hasRunning" in candidate) || typeof candidate.hasRunning !== "function" ||
+        if (!isManager(candidate) ||
           (manager !== undefined && candidate !== manager)) return;
         const record: unknown = candidate.getRecord(id);
         if (!record || typeof record !== "object" || Array.isArray(record) || !("id" in record) || record.id !== id) return;
-        manager = candidate as Manager;
+        manager = candidate;
         ownedIds.add(id);
         refresh();
       } catch {

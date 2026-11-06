@@ -1,14 +1,26 @@
+import { record } from "./helpers/guards.ts";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import * as status from "../pi-extension.ts";
 
+// A real SDK host must remain assignable to the registration entrypoint.
+const register: (pi: ExtensionAPI) => void = status.default;
+assert.equal(register, status.default);
+
 test("package uses the pi-zellij-tab-status Git source without a slash command", () => {
-  const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  const parsed: unknown = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  const manifest = record(parsed);
   const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
   assert.equal(manifest.name, "pi-zellij-tab-status");
-  assert.equal(manifest.repository.url, "git+ssh://git@github.com/pbjorklund/pi-zellij-tab-status.git");
-  assert.deepEqual(manifest.pi.extensions, ["./pi-extension.ts"]);
+  assert.equal(record(manifest.repository).url, "git+ssh://git@github.com/pbjorklund/pi-zellij-tab-status.git");
+  assert.deepEqual(record(manifest.pi).extensions, ["./pi-extension.ts"]);
+  assert.deepEqual(manifest.exports, { ".": "./pi-extension.ts", "./pi-extension": "./pi-extension.ts" });
+  assert.ok(Array.isArray(manifest.files) && manifest.files.includes("lib") && manifest.files.includes("pi-extension.ts") && manifest.files.includes("CHANGELOG.md"));
+  assert.equal(typeof manifest.version, "string");
+  const changelog = readFileSync(new URL("../CHANGELOG.md", import.meta.url), "utf8");
+  assert.ok(changelog.split("\n").includes(`## ${String(manifest.version)}`), "release notes must match the unchanged package version");
   assert.match(readme, /pi update git:github\.com\/pbjorklund\/pi-zellij-tab-status/);
   assert.doesNotMatch(readme, /pbjorklund\/zellij-pi-tab-status/);
 });

@@ -1,13 +1,18 @@
-import { execFile, spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
+import { execFile, spawn, type ChildProcess, type ExecFileOptions, type SpawnOptions } from "node:child_process";
 import { promisify } from "node:util";
 
-export const defaultExecFileAsync = promisify(execFile);
-export type ExecFileAsyncFn = typeof defaultExecFileAsync;
+export type ExecFileAsyncFn = (command: string, args: string[], options: ExecFileOptions) => Promise<{ stdout: string }>;
+export const defaultExecFileAsync: ExecFileAsyncFn = promisify(execFile);
 export type SpawnIgnoredFn = (
   command: string,
   args: string[],
   options: SpawnOptions,
-) => Pick<ChildProcess, "once" | "kill" | "unref">;
+) => {
+  once(event: "error", listener: (error: Error) => void): unknown;
+  once(event: "close", listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
+  kill: ChildProcess["kill"];
+  unref: ChildProcess["unref"];
+};
 export const defaultSpawnIgnored: SpawnIgnoredFn = spawn;
 const COMMAND_TIMEOUT_MS = 2_000;
 const PIPE_TIMEOUT_MS = 150;

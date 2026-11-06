@@ -3,7 +3,7 @@ export type SubagentLifecycleEvent = { id?: unknown };
 
 export function parseSubagentId(event: unknown): string | null {
   if (!event || typeof event !== "object" || Array.isArray(event)) return null;
-  const { id } = event as SubagentLifecycleEvent;
+  const id = "id" in event ? event.id : undefined;
   return typeof id === "string" && id.trim().length > 0 ? id : null;
 }
 

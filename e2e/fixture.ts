@@ -1,12 +1,13 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { createAssistantMessageEventStream, type AssistantMessage } from "@earendil-works/pi-ai";
+import { createAssistantMessageEventStream, type AssistantMessage, type ToolCall } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 export default function fixture(pi: ExtensionAPI) {
-  const directory = process.env.TAB_STATUS_E2E_DIR!;
+  const directory = process.env.TAB_STATUS_E2E_DIR;
+  if (!directory) throw new Error("TAB_STATUS_E2E_DIR is required");
   const mark = (name: string) => writeFileSync(join(directory, name), "ready");
   const has = (name: string) => existsSync(join(directory, name));
   let sessionId: string;
@@ -54,7 +55,7 @@ export default function fixture(pi: ExtensionAPI) {
             : "";
           if (text === "hold") await gate("release-parent", options?.signal);
           if (text === "spawn") {
-            const toolCall = { type: "toolCall" as const, id: "call-child", name: "subagent", arguments: {} };
+            const toolCall: ToolCall = { type: "toolCall", id: "call-child", name: "subagent", arguments: {} };
             output.content.push(toolCall);
             stream.push({ type: "toolcall_start", contentIndex: 0, partial: output });
             stream.push({ type: "toolcall_end", contentIndex: 0, toolCall, partial: output });
