@@ -42,7 +42,8 @@ export function createWorkTracker() {
 export function createActivityState() {
   const work = createWorkTracker();
   let delegatedWork = 0;
-  const hasActiveWork = () => work.hasActiveWork() || delegatedWork > 0;
+  let providerRunning = false;
+  const hasActiveWork = () => work.hasActiveWork() || delegatedWork > 0 || providerRunning;
   let compaction: "inactive" | "active" | "work-completed" = "inactive";
 
   function mode(idle: "base" | "done" = "base"): TabMode {
@@ -60,6 +61,10 @@ export function createActivityState() {
     // rather than storing a second copy that could outlive the controller's marker.
     mode: () => mode(),
     hasActiveWork,
+    setProviderRunning(running: boolean) {
+      providerRunning = running;
+      return running ? mode() : completeWork();
+    },
     setDelegatedWork(count: number) {
       delegatedWork = count;
       return count > 0 ? mode() : completeWork();
@@ -92,6 +97,7 @@ export function createActivityState() {
     reset() {
       work.reset();
       delegatedWork = 0;
+      providerRunning = false;
       compaction = "inactive";
     },
   };

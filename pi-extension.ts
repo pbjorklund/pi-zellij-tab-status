@@ -3,6 +3,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { createTabStatusController, type ZellijTabStatusOptions, type WatcherDetail, type WatcherStates } from "./lib/controller.ts";
 import { createActivityState, parseSubagentId, type TabMode } from "./lib/activity.ts";
 import { createSubagentJobObserver } from "./lib/subagent-jobs.ts";
+import { createTintinObserver } from "./lib/tintin.ts";
 
 export type { ZellijTabStatusOptions } from "./lib/controller.ts";
 export type { ZellijTabInfo } from "./lib/ownership.ts";
@@ -78,17 +79,30 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
     showActivity(ctx, activity.setDelegatedWork(count));
   });
   pi.events?.on?.("subagents:work", (snapshot) => jobs.update(snapshot));
+  const tintin = createTintinObserver((working) => {
+    const mode = activity.setProviderRunning(working);
+    if (currentCtx) showActivity(currentCtx, mode);
+  });
+  pi.events?.on?.("subagents:created", (event) => {
+    const id = parseSubagentId(event);
+    if (!closed && currentCtx && id) tintin.observe(id);
+  });
 
   pi.on("session_start", (_event, ctx) => {
     startBar(ctx);
+    tintin.reset();
     activity.reset();
+    currentCtx = ctx;
     jobs.start(ctx);
     showActivity(ctx, activity.mode());
   });
   pi.on("agent_start", (_event, ctx) => showActivity(ctx, activity.startParent()));
   // agent_end can precede retries and queued follow-ups. Only settlement
   // ends the parent's working span.
-  pi.on("agent_settled", (_event, ctx) => showActivity(ctx, activity.settleParent()));
+  pi.on("agent_settled", (_event, ctx) => {
+    tintin.refresh();
+    showActivity(ctx, activity.settleParent());
+  });
   pi.on("session_before_compact", (_event, ctx) => showActivity(ctx, activity.startCompaction()));
   const finishCompacting = (_event: unknown, ctx: ExtensionContext) => showActivity(ctx, activity.finishCompaction());
   pi.on("session_compact", finishCompacting);
@@ -97,13 +111,16 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
   pi.events?.on?.("subagents:started", (event) => {
     const id = parseSubagentId(event);
     if (closed || !id) return;
+    if (currentCtx) tintin.observe(id);
     const mode = activity.startChild(id);
     if (currentCtx) showActivity(currentCtx, mode);
   });
   for (const event of ["subagents:completed", "subagents:failed"]) {
     pi.events?.on?.(event, (data) => {
       const id = parseSubagentId(data);
-      if (closed || !id || !activity.hasActiveWork()) return;
+      if (closed || !id) return;
+      tintin.terminal(id);
+      if (!activity.hasActiveWork()) return;
       const mode = activity.finishChild(id);
       if (currentCtx) showActivity(currentCtx, mode);
     });
@@ -117,6 +134,7 @@ export default function zellijPiTabStatus(pi: ExtensionAPI, options: ZellijTabSt
     clearBar();
     closed = true;
     jobs.close();
+    tintin.reset();
     activity.reset();
     currentCtx = null;
     return controller.close();
